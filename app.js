@@ -14,6 +14,11 @@ let deletedPhotoIds = [];
 let deletedPhotoPaths = [];
 let pendingWebshopCigar = null;
 let pendingWebshopHandled = false;
+let cropPointers = new Map();
+let cropDrag = null;
+let cropPinchStart = null;
+const SORT_DEFAULT_DIR = { history: 'asc', recent: 'desc', name: 'asc', rating: 'desc', strength: 'desc' };
+let sortDir = 'asc';
 
 const els = {
   results: document.getElementById('results'),
@@ -22,11 +27,15 @@ const els = {
   search: document.getElementById('search'),
   statusFilter: document.getElementById('statusFilter'),
   sortBy: document.getElementById('sortBy'),
+  sortDirBtn: document.getElementById('sortDirBtn'),
   cardViewBtn: document.getElementById('cardViewBtn'),
   listViewBtn: document.getElementById('listViewBtn'),
   addBtn: document.getElementById('addBtn'),
   exportBtn: document.getElementById('exportBtn'),
   importBtn: document.getElementById('importBtn'),
+  moreMenuBtn: document.getElementById('moreMenuBtn'),
+  moreMenu: document.getElementById('moreMenu'),
+  appHeader: document.querySelector('.app-header'),
   importFile: document.getElementById('importFile'),
   webshopBtn: document.getElementById('webshopBtn'),
   webshopModal: document.getElementById('webshopModal'),
@@ -56,6 +65,9 @@ const els = {
   imageCropPreview: document.getElementById('imageCropPreview'),
   photoManager: document.getElementById('photoManager'),
   resetCropBtn: document.getElementById('resetCropBtn'),
+  cropZoomValue: document.getElementById('cropZoomValue'),
+  cropZoomInBtn: document.getElementById('cropZoomInBtn'),
+  cropZoomOutBtn: document.getElementById('cropZoomOutBtn'),
   syncStatus: document.getElementById('syncStatus'),
   accessBadge: document.getElementById('accessBadge'),
   signOutBtn: document.getElementById('signOutBtn'),
@@ -164,19 +176,38 @@ function numeric(value, fallback = 0) {
   return Number.isFinite(number) ? number : fallback;
 }
 
+const IMAGE_ZOOM_MIN = 0.25;
+const IMAGE_ZOOM_MAX = 4;
+// The photo can always be dragged this many % of the frame size in any
+// direction, at any zoom — including past the point where it stops fully
+// covering the frame. Constant on purpose: panning should never feel "stuck"
+// at an edge just because you haven't zoomed in yet.
+const IMAGE_MAX_TRAVEL = 60;
+
 function imageCrop(cigar = {}) {
   return {
-    x: Math.min(150, Math.max(-50, numeric(cigar.imageCropX, 50))),
-    y: Math.min(150, Math.max(-50, numeric(cigar.imageCropY, 50))),
-    zoom: Math.min(2.5, Math.max(0.75, numeric(cigar.imageZoom, 1)))
+    x: Math.min(100, Math.max(0, numeric(cigar.imageCropX, 50))),
+    y: Math.min(100, Math.max(0, numeric(cigar.imageCropY, 50))),
+    zoom: Math.min(IMAGE_ZOOM_MAX, Math.max(IMAGE_ZOOM_MIN, numeric(cigar.imageZoom, 1)))
   };
+}
+
+// Pan is stored as a 0-100 position (50 = centered) within IMAGE_MAX_TRAVEL.
+function cropPercentToShift(pct, zoom) {
+  return (((pct - 50) / 50) * IMAGE_MAX_TRAVEL) / zoom;
+}
+function cropShiftToPercent(shift, zoom) {
+  return Math.min(100, Math.max(0, 50 + (shift * zoom * 50) / IMAGE_MAX_TRAVEL));
+}
+function cropMaxShift(zoom) {
+  return IMAGE_MAX_TRAVEL / zoom;
 }
 
 function imageCropStyle(cigar = {}) {
   const crop = imageCrop(cigar);
-  const shiftX = ((50 - crop.x) * 0.45).toFixed(2);
-  const shiftY = ((50 - crop.y) * 0.45).toFixed(2);
-  return `--img-shift-x:${shiftX}%; --img-shift-y:${shiftY}%; --img-zoom:${crop.zoom};`;
+  const shiftX = cropPercentToShift(crop.x, crop.zoom).toFixed(2);
+  const shiftY = cropPercentToShift(crop.y, crop.zoom).toFixed(2);
+  return `--img-shift-x:${shiftX}%; --img-shift-y:${shiftY}%; --img-zoom:${crop.zoom.toFixed(3)};`;
 }
 
 function imageExists(src) {
@@ -393,11 +424,12 @@ function canEditCigar(cigar = {}) {
 
 function setAccessUi() {
   const readOnly = isReadOnlyUser();
+  const loggedOut = Boolean(supabaseClient && !currentUser);
   document.body.dataset.accessLevel = currentAccess.accessLevel || 'local';
-  els.addBtn?.classList.toggle('hidden', readOnly || (supabaseClient && currentUser && !canWrite()));
-  els.importBtn?.classList.toggle('hidden', readOnly || (supabaseClient && currentUser && !canWrite()));
-  els.webshopBtn?.classList.toggle('hidden', readOnly || (supabaseClient && currentUser && !canWrite()));
-  els.exportBtn?.classList.toggle('hidden', readOnly);
+  els.addBtn?.classList.toggle('hidden', loggedOut || readOnly || (supabaseClient && currentUser && !canWrite()));
+  els.importBtn?.classList.toggle('hidden', loggedOut || readOnly || (supabaseClient && currentUser && !canWrite()));
+  els.webshopBtn?.classList.toggle('hidden', loggedOut || readOnly || (supabaseClient && currentUser && !canWrite()));
+  els.exportBtn?.classList.toggle('hidden', loggedOut || readOnly);
   els.accessBadge?.classList.toggle('hidden', !readOnly);
 }
 
@@ -782,7 +814,9 @@ async function deleteRemoteCigar(cigar) {
 
 function setAuthUi() {
   const cloud = Boolean(supabaseClient && currentUser);
+  const loggedOut = Boolean(supabaseClient && !currentUser);
   els.signOutBtn?.classList.toggle('hidden', !cloud);
+  els.moreMenuBtn?.classList.toggle('hidden', loggedOut);
   els.authPanel?.classList.toggle('hidden', !supabaseClient || cloud);
   els.appShell?.classList.toggle('hidden', Boolean(supabaseClient && !cloud));
 
@@ -877,10 +911,29 @@ function createdDateValue(value) {
   return Number.isNaN(date.getTime()) ? 0 : date.getTime();
 }
 
+function compareCigars(sort, a, b) {
+  if (sort === 'history') {
+    const orderA = a.logOrder ? Number(a.logOrder) : Number.POSITIVE_INFINITY;
+    const orderB = b.logOrder ? Number(b.logOrder) : Number.POSITIVE_INFINITY;
+    if (orderA !== orderB) return orderA - orderB;
+
+    const smokedA = orderDateValue(a.smokedDate);
+    const smokedB = orderDateValue(b.smokedDate);
+    if (smokedA !== smokedB) return smokedA - smokedB;
+
+    return createdDateValue(a.createdAt) - createdDateValue(b.createdAt);
+  }
+  if (sort === 'name') return a.name.localeCompare(b.name);
+  if (sort === 'rating') return Number(a.rating || 0) - Number(b.rating || 0);
+  if (sort === 'strength') return Number(a.strength || 0) - Number(b.strength || 0);
+  return createdDateValue(a.createdAt) - createdDateValue(b.createdAt);
+}
+
 function visibleCigars() {
   const query = normalise(els.search.value);
   const status = els.statusFilter.value;
   const sort = els.sortBy.value;
+  const dirMul = sortDir === 'desc' ? -1 : 1;
 
   const filtered = cigars.filter((cigar) => {
     const statusOk = status === 'all' || cigar.status === status;
@@ -888,23 +941,16 @@ function visibleCigars() {
     return statusOk && searchOk;
   });
 
-  return filtered.sort((a, b) => {
-    if (sort === 'history') {
-      const orderA = a.logOrder ? Number(a.logOrder) : Number.POSITIVE_INFINITY;
-      const orderB = b.logOrder ? Number(b.logOrder) : Number.POSITIVE_INFINITY;
-      if (orderA !== orderB) return orderA - orderB;
+  return filtered.sort((a, b) => compareCigars(sort, a, b) * dirMul);
+}
 
-      const smokedA = orderDateValue(a.smokedDate);
-      const smokedB = orderDateValue(b.smokedDate);
-      if (smokedA !== smokedB) return smokedA - smokedB;
-
-      return createdDateValue(a.createdAt) - createdDateValue(b.createdAt);
-    }
-    if (sort === 'name') return a.name.localeCompare(b.name);
-    if (sort === 'rating') return Number(b.rating || 0) - Number(a.rating || 0);
-    if (sort === 'strength') return Number(b.strength || 0) - Number(a.strength || 0);
-    return createdDateValue(b.createdAt) - createdDateValue(a.createdAt);
-  });
+function updateSortDirBtn() {
+  if (!els.sortDirBtn) return;
+  const asc = sortDir === 'asc';
+  els.sortDirBtn.textContent = asc ? '↑' : '↓';
+  const label = asc ? 'Sort ascending — click to reverse' : 'Sort descending — click to reverse';
+  els.sortDirBtn.setAttribute('aria-label', label);
+  els.sortDirBtn.title = label;
 }
 
 function renderStats() {
@@ -996,6 +1042,7 @@ function listHtml(cigar) {
 
 function render() {
   renderStats();
+  syncHeaderHeight();
 
   const list = visibleCigars();
   els.results.className = `results ${viewMode === 'cards' ? 'cards-view' : 'list-view'}`;
@@ -1114,12 +1161,126 @@ function updateImageCropPreview() {
     els.imageCropPreview.className = 'crop-preview no-photo';
     els.imageCropPreview.innerHTML = 'No profile photo yet';
     renderPhotoManager();
+    updateZoomBadge();
     return;
   }
 
   els.imageCropPreview.className = 'crop-preview photo-frame';
   els.imageCropPreview.innerHTML = `<img class="cigar-photo" src="${escapeHtml(src)}" alt="Profile preview" style="${imageCropStyle(crop)}">`;
   renderPhotoManager();
+  updateZoomBadge();
+}
+
+function currentFormCropImg() {
+  return els.imageCropPreview?.querySelector('img.cigar-photo') || null;
+}
+
+function applyCropTransform() {
+  const img = currentFormCropImg();
+  if (img) img.style.cssText = imageCropStyle(getFormCrop());
+}
+
+function updateZoomBadge() {
+  if (!els.cropZoomValue) return;
+  const zoom = Number(document.getElementById('imageZoom').value || 1);
+  els.cropZoomValue.textContent = `${zoom.toFixed(2)}×`;
+}
+
+function setCropValues({ x, y, zoom } = {}) {
+  const xEl = document.getElementById('imageCropX');
+  const yEl = document.getElementById('imageCropY');
+  const zEl = document.getElementById('imageZoom');
+  if (zoom !== undefined) zEl.value = Math.min(IMAGE_ZOOM_MAX, Math.max(IMAGE_ZOOM_MIN, zoom)).toFixed(3);
+  if (x !== undefined) xEl.value = Math.min(100, Math.max(0, x)).toFixed(2);
+  if (y !== undefined) yEl.value = Math.min(100, Math.max(0, y)).toFixed(2);
+  applyCropTransform();
+  updateZoomBadge();
+}
+
+function endCropPointer(event) {
+  cropPointers.delete(event.pointerId);
+  if (cropDrag && event.pointerId === cropDrag.pointerId) cropDrag = null;
+  if (cropPointers.size < 2) cropPinchStart = null;
+  if (!cropPointers.size) els.imageCropPreview?.classList.remove('dragging');
+}
+
+function attachCropInteractions() {
+  const el = els.imageCropPreview;
+  if (!el) return;
+
+  el.addEventListener('pointerdown', (event) => {
+    if (!currentFormCropImg()) return;
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    cropPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    el.setPointerCapture(event.pointerId);
+
+    if (cropPointers.size === 2) {
+      const pts = Array.from(cropPointers.values());
+      cropPinchStart = {
+        dist: Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y),
+        zoom: Number(document.getElementById('imageZoom').value || 1)
+      };
+      cropDrag = null;
+    } else if (cropPointers.size === 1) {
+      const zoom = Number(document.getElementById('imageZoom').value || 1);
+      const x = Number(document.getElementById('imageCropX').value || 50);
+      const y = Number(document.getElementById('imageCropY').value || 50);
+      cropDrag = {
+        pointerId: event.pointerId,
+        startClientX: event.clientX,
+        startClientY: event.clientY,
+        startShiftX: cropPercentToShift(x, zoom),
+        startShiftY: cropPercentToShift(y, zoom),
+        zoom
+      };
+    }
+    el.classList.add('dragging');
+  });
+
+  el.addEventListener('pointermove', (event) => {
+    if (!cropPointers.has(event.pointerId)) return;
+    cropPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+    if (cropPointers.size === 2 && cropPinchStart) {
+      const pts = Array.from(cropPointers.values());
+      const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      if (cropPinchStart.dist > 0) {
+        setCropValues({ zoom: cropPinchStart.zoom * (dist / cropPinchStart.dist) });
+      }
+      return;
+    }
+
+    if (cropDrag && event.pointerId === cropDrag.pointerId) {
+      const rect = el.getBoundingClientRect();
+      const zoom = cropDrag.zoom;
+      const deltaShiftX = ((event.clientX - cropDrag.startClientX) / (rect.width * zoom)) * 100;
+      const deltaShiftY = ((event.clientY - cropDrag.startClientY) / (rect.height * zoom)) * 100;
+      const bound = cropMaxShift(zoom);
+      const newShiftX = Math.min(bound, Math.max(-bound, cropDrag.startShiftX + deltaShiftX));
+      const newShiftY = Math.min(bound, Math.max(-bound, cropDrag.startShiftY + deltaShiftY));
+      setCropValues({
+        x: cropShiftToPercent(newShiftX, zoom),
+        y: cropShiftToPercent(newShiftY, zoom)
+      });
+    }
+  });
+
+  el.addEventListener('pointerup', endCropPointer);
+  el.addEventListener('pointercancel', endCropPointer);
+
+  el.addEventListener('wheel', (event) => {
+    if (!currentFormCropImg()) return;
+    event.preventDefault();
+    const zoom = Number(document.getElementById('imageZoom').value || 1);
+    setCropValues({ zoom: zoom * (1 - Math.sign(event.deltaY) * 0.08) });
+  }, { passive: false });
+
+  els.cropZoomInBtn?.addEventListener('click', () => {
+    setCropValues({ zoom: Number(document.getElementById('imageZoom').value || 1) + 0.25 });
+  });
+  els.cropZoomOutBtn?.addEventListener('click', () => {
+    setCropValues({ zoom: Number(document.getElementById('imageZoom').value || 1) - 0.25 });
+  });
 }
 
 function renderPhotoManager() {
@@ -1780,10 +1941,52 @@ function importWebshopJson() {
   }
 }
 
+function syncHeaderHeight() {
+  if (!els.appHeader) return;
+  document.documentElement.style.setProperty('--header-h', `${els.appHeader.offsetHeight}px`);
+}
+
+function closeMoreMenu() {
+  els.moreMenu?.classList.add('hidden');
+  els.moreMenuBtn?.setAttribute('aria-expanded', 'false');
+}
+
+function toggleMoreMenu() {
+  const willOpen = els.moreMenu?.classList.contains('hidden');
+  els.moreMenu?.classList.toggle('hidden', !willOpen);
+  els.moreMenuBtn?.setAttribute('aria-expanded', String(Boolean(willOpen)));
+}
+
 function attachEvents() {
+  window.addEventListener('resize', syncHeaderHeight);
+  syncHeaderHeight();
+
+  els.moreMenuBtn?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    toggleMoreMenu();
+  });
+  els.moreMenu?.addEventListener('click', (event) => {
+    if (event.target.closest('.menu-item')) closeMoreMenu();
+  });
+  document.addEventListener('click', (event) => {
+    if (!els.moreMenu || els.moreMenu.classList.contains('hidden')) return;
+    if (event.target.closest('.menu-wrap')) return;
+    closeMoreMenu();
+  });
+
   els.search.addEventListener('input', render);
   els.statusFilter.addEventListener('change', render);
-  els.sortBy.addEventListener('change', render);
+  els.sortBy.addEventListener('change', () => {
+    sortDir = SORT_DEFAULT_DIR[els.sortBy.value] || 'asc';
+    updateSortDirBtn();
+    render();
+  });
+  els.sortDirBtn?.addEventListener('click', () => {
+    sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+    updateSortDirBtn();
+    render();
+  });
+  updateSortDirBtn();
 
   els.cardViewBtn.addEventListener('click', () => {
     viewMode = 'cards';
@@ -1895,16 +2098,12 @@ function attachEvents() {
     }
   });
 
-  ['imageFile', 'imageCropX', 'imageCropY', 'imageZoom'].forEach((id) => {
-    const field = document.getElementById(id);
-    if (field) field.addEventListener('input', updateImageCropPreview);
-  });
+  const imageFileField = document.getElementById('imageFile');
+  if (imageFileField) imageFileField.addEventListener('input', updateImageCropPreview);
+  attachCropInteractions();
 
   els.resetCropBtn.addEventListener('click', () => {
-    document.getElementById('imageCropX').value = 50;
-    document.getElementById('imageCropY').value = 50;
-    document.getElementById('imageZoom').value = 1;
-    updateImageCropPreview();
+    setCropValues({ x: 50, y: 50, zoom: 1 });
   });
 
   [els.detailModal, els.formModal, els.galleryModal, els.webshopModal].forEach((modal) => {
@@ -1919,6 +2118,7 @@ function attachEvents() {
       closeDetail();
       closeForm();
       closeWebshopModal();
+      closeMoreMenu();
     }
     if (!els.galleryModal.classList.contains('hidden')) {
       if (event.key === 'ArrowLeft') moveGallery(-1);

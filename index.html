@@ -9,20 +9,27 @@
 <body>
   <header class="app-header">
     <nav class="topbar">
-      <div class="brand-block">
-        <p class="eyebrow">Personal journal</p>
-        <h1>Pityu Cigar Log</h1>
+      <div class="brand-row">
+        <div class="brand-block">
+          <h1>Pityu Cigar Log</h1>
+          <p class="eyebrow">Personal journal</p>
+        </div>
+        <div class="top-actions">
+          <span id="syncStatus" class="sync-status">Local mode</span>
+          <span id="accessBadge" class="access-badge hidden" title="Read-only">👁</span>
+          <button id="addBtn" class="primary-btn" type="button">＋ <span class="btn-label">Add</span></button>
+          <div class="menu-wrap">
+            <button id="moreMenuBtn" class="icon-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="More actions">⋯</button>
+            <div id="moreMenu" class="more-menu hidden" role="menu">
+              <button id="exportBtn" class="menu-item" type="button" role="menuitem">⇩ Export</button>
+              <button id="importBtn" class="menu-item" type="button" role="menuitem">⇧ Import</button>
+              <button id="signOutBtn" class="menu-item hidden" type="button" role="menuitem">↪ Sign out</button>
+            </div>
+          </div>
+          <input id="importFile" class="hidden" type="file" accept="application/json,.json">
+        </div>
       </div>
       <div id="stats" class="stats" aria-live="polite"></div>
-      <div class="top-actions">
-        <span id="syncStatus" class="sync-status">Local mode</span>
-        <span id="accessBadge" class="access-badge hidden">👁 Read-only</span>
-        <button id="signOutBtn" class="ghost-btn hidden" type="button">↪ Sign out</button>
-        <button id="exportBtn" class="ghost-btn" type="button">⇩ Export</button>
-        <button id="importBtn" class="ghost-btn" type="button">⇧ Import</button>
-        <button id="addBtn" class="primary-btn" type="button">＋ Add cigar</button>
-        <input id="importFile" class="hidden" type="file" accept="application/json,.json">
-      </div>
     </nav>
   </header>
 
@@ -48,34 +55,35 @@
   <main id="appShell" class="shell">
     <section class="toolbar" aria-label="Cigar log tools">
       <label class="search-box">
-        <span>Search</span>
-        <input id="search" type="search" placeholder="Name, brand, country, wrapper, notes…">
+        <span class="sr-only">Search</span>
+        <input id="search" type="search" placeholder="Search name, brand, country, wrapper, notes…">
       </label>
 
-      <label>
-        <span>Status</span>
-        <select id="statusFilter">
+      <div class="filter-row">
+        <label class="sr-only" for="statusFilter">Status</label>
+        <select id="statusFilter" class="filter-select">
           <option value="all">All cigars</option>
           <option value="owned">☘ In humidor</option>
           <option value="smoked">◉ Smoked</option>
           <option value="wishlist">☆ Wishlist</option>
         </select>
-      </label>
 
-      <label>
-        <span>Sort</span>
-        <select id="sortBy">
-          <option value="history">Smoking history</option>
-          <option value="recent">Date added, newest</option>
-          <option value="name">Name A–Z</option>
-          <option value="rating">Best rated</option>
-          <option value="strength">Strength</option>
-        </select>
-      </label>
+        <div class="sort-group">
+          <label class="sr-only" for="sortBy">Sort</label>
+          <select id="sortBy" class="filter-select">
+            <option value="history">Smoking history</option>
+            <option value="recent">Date added, newest</option>
+            <option value="name">Name A–Z</option>
+            <option value="rating">Best rated</option>
+            <option value="strength">Strength</option>
+          </select>
+          <button id="sortDirBtn" class="icon-btn sort-dir-btn" type="button" aria-label="Sort ascending — click to reverse">↑</button>
+        </div>
 
-      <div class="view-toggle" role="group" aria-label="View mode">
-        <button id="cardViewBtn" type="button" class="active">Cards</button>
-        <button id="listViewBtn" type="button">List</button>
+        <div class="view-toggle" role="group" aria-label="View mode">
+          <button id="cardViewBtn" type="button" class="active">Cards</button>
+          <button id="listViewBtn" type="button">List</button>
+        </div>
       </div>
     </section>
 
@@ -202,18 +210,24 @@
         <fieldset class="wide image-fieldset">
           <legend>Photos</legend>
           <div class="image-editor">
-            <div id="imageCropPreview" class="crop-preview no-photo">No profile photo yet</div>
+            <div class="crop-editor">
+              <div id="imageCropPreview" class="crop-preview no-photo">No profile photo yet</div>
+              <div class="crop-toolbar">
+                <button id="cropZoomOutBtn" class="icon-btn small-icon-btn" type="button" aria-label="Zoom out">−</button>
+                <span id="cropZoomValue" class="crop-zoom-value">1.0×</span>
+                <button id="cropZoomInBtn" class="icon-btn small-icon-btn" type="button" aria-label="Zoom in">+</button>
+                <button id="resetCropBtn" class="ghost-btn small-btn" type="button">Reset</button>
+              </div>
+              <p class="hint">Drag the photo to reposition it. Scroll, pinch, or use +/− to zoom.</p>
+              <input id="imageCropX" type="hidden" value="50">
+              <input id="imageCropY" type="hidden" value="50">
+              <input id="imageZoom" type="hidden" value="1">
+            </div>
             <div class="image-controls">
               <input id="imageFile" type="hidden">
               <label class="upload-drop">Upload photo(s)<input id="imageUpload" type="file" accept="image/*" multiple></label>
               <div id="photoManager" class="photo-manager" aria-live="polite"></div>
-              <div class="slider-grid">
-                <label>Move left / right<input id="imageCropX" type="range" min="-50" max="150" step="1" value="50"></label>
-                <label>Move up / down<input id="imageCropY" type="range" min="-50" max="150" step="1" value="50"></label>
-                <label>Zoom<input id="imageZoom" type="range" min="0.75" max="2.5" step="0.05" value="1"></label>
-              </div>
-              <button id="resetCropBtn" class="ghost-btn small-btn" type="button">Reset profile crop</button>
-              <p class="hint">Choose one photo as the profile photo for cards and lists. The sliders move only that profile crop. Clicking any photo opens the full gallery.</p>
+              <p class="hint">Choose one photo as the profile photo for cards and lists. Clicking any photo opens the full gallery.</p>
             </div>
           </div>
         </fieldset>
