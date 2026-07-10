@@ -976,6 +976,7 @@ function blendLine(cigar) {
   const filler = [cigar.fillerLeaf, cigar.fillerOrigin].filter(Boolean).join(' · ');
 
   return [
+    cigar.madeIn ? `<span class="made-in-chip"><b>Made in</b> ${escapeHtml(cigar.madeIn)}</span>` : '',
     wrapper ? `<span><b>Wrapper</b> ${escapeHtml(wrapper)}</span>` : '',
     binder ? `<span><b>Binder</b> ${escapeHtml(binder)}</span>` : '',
     filler ? `<span><b>Filler</b> ${escapeHtml(filler)}</span>` : ''
@@ -1319,6 +1320,8 @@ function setFormProfilePhoto(photoId) {
 function removeFormPhoto(photoId) {
   const photo = formPhotos.find((item) => String(item.id) === String(photoId));
   if (!photo) return;
+
+  if (!confirm('Remove this photo?')) return;
 
   if (photo.imagePath && !photo.localOnly) deletedPhotoPaths.push(photo.imagePath);
   if (photo.id && !String(photo.id).startsWith('temp-') && !photo.legacy && !photo.localOnly) {

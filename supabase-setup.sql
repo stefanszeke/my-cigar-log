@@ -79,6 +79,8 @@ alter table public.cigar_access enable row level security;
 grant usage on schema public to authenticated;
 grant select, insert, update, delete on public.cigars to authenticated;
 grant select on public.cigar_access to authenticated;
+grant select on public.cigar_photos to authenticated;
+grant select on storage.objects to authenticated;
 
 -- Replace old cigar table policies.
 drop policy if exists "Users can read own cigars" on public.cigars;
