@@ -114,13 +114,3 @@ Uploaded photos are compressed in the browser before upload, stored in the priva
 
 You can host this folder on GitHub Pages. The app will still use Supabase for login, database, and photos.
 
-## v9 notes
-
-This version reverts the heavy v8 visual pass and uses a cleaner modern layout:
-
-- single-line top app bar
-- neutral light colors
-- no photo-count badge on images
-- viewer photo access SQL included as `supabase-viewer-photo-access.sql`
-
-If read-only viewers can see cigar rows but not photos, run `supabase-viewer-photo-access.sql` in the Supabase SQL editor.
