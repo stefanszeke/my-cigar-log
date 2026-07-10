@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pityu Cigar Log</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="app-header">
+    <nav class="topbar">
+      <div class="brand-block">
+        <p class="eyebrow">Personal journal</p>
+        <h1>Pityu Cigar Log</h1>
+      </div>
+      <div id="stats" class="stats" aria-live="polite"></div>
+      <div class="top-actions">
+        <span id="syncStatus" class="sync-status">Local mode</span>
+        <span id="accessBadge" class="access-badge hidden">👁 Read-only</span>
+        <button id="signOutBtn" class="ghost-btn hidden" type="button">↪ Sign out</button>
+        <button id="exportBtn" class="ghost-btn" type="button">⇩ Export</button>
+        <button id="importBtn" class="ghost-btn" type="button">⇧ Import</button>
+        <button id="addBtn" class="primary-btn" type="button">＋ Add cigar</button>
+        <input id="importFile" class="hidden" type="file" accept="application/json,.json">
+      </div>
+    </nav>
+  </header>
+
+  <section id="authPanel" class="auth-panel hidden" aria-live="polite">
+    <div class="auth-card">
+      <div>
+        <p class="eyebrow">Cloud sync</p>
+        <h2>Sign in to your cigar log</h2>
+        <p>Use your Supabase account to sync cigars and photos between devices.</p>
+      </div>
+      <form id="authForm" class="auth-form">
+        <label>Email<input id="authEmail" type="email" autocomplete="email" required placeholder="you@example.com"></label>
+        <label>Password<input id="authPassword" type="password" autocomplete="current-password" required placeholder="Your password"></label>
+        <div class="auth-actions">
+          <button id="signInBtn" class="primary-btn" type="submit">Sign in</button>
+        </div>
+        <p class="auth-hint">Private log: existing Supabase users can sign in. Some users may be read-only viewers.</p>
+        <p id="authMessage" class="auth-message"></p>
+      </form>
+    </div>
+  </section>
+
+  <main id="appShell" class="shell">
+    <section class="toolbar" aria-label="Cigar log tools">
+      <label class="search-box">
+        <span>Search</span>
+        <input id="search" type="search" placeholder="Name, brand, country, wrapper, notes…">
+      </label>
+
+      <label>
+        <span>Status</span>
+        <select id="statusFilter">
+          <option value="all">All cigars</option>
+          <option value="owned">☘ In humidor</option>
+          <option value="smoked">◉ Smoked</option>
+          <option value="wishlist">☆ Wishlist</option>
+        </select>
+      </label>
+
+      <label>
+        <span>Sort</span>
+        <select id="sortBy">
+          <option value="history">Smoking history</option>
+          <option value="recent">Date added, newest</option>
+          <option value="name">Name A–Z</option>
+          <option value="rating">Best rated</option>
+          <option value="strength">Strength</option>
+        </select>
+      </label>
+
+      <div class="view-toggle" role="group" aria-label="View mode">
+        <button id="cardViewBtn" type="button" class="active">Cards</button>
+        <button id="listViewBtn" type="button">List</button>
+      </div>
+    </section>
+
+
+    <section id="results" class="results cards-view" aria-live="polite"></section>
+    <p id="empty" class="empty hidden">No cigars found. Try another search or add a new cigar.</p>
+  </main>
+
+  <div id="detailModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="detailTitle">
+    <div class="modal-card large-modal">
+      <button id="detailClose" class="modal-close" type="button" aria-label="Close details">&times;</button>
+      <div id="detailBody"></div>
+    </div>
+  </div>
+
+  <div id="galleryModal" class="modal gallery-modal hidden" role="dialog" aria-modal="true" aria-label="Image gallery">
+    <div class="gallery-card">
+      <button id="galleryClose" class="modal-close gallery-close" type="button" aria-label="Close gallery">&times;</button>
+      <button id="galleryPrev" class="gallery-nav prev" type="button" aria-label="Previous image">‹</button>
+      <div id="galleryBody" class="gallery-body"></div>
+      <button id="galleryNext" class="gallery-nav next" type="button" aria-label="Next image">›</button>
+      <div id="galleryCounter" class="gallery-counter"></div>
+    </div>
+  </div>
+
+  <div id="webshopModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="webshopTitle">
+    <div class="modal-card webshop-card">
+      <button id="webshopClose" class="modal-close" type="button" aria-label="Close webshop importer">&times;</button>
+      <p class="eyebrow">Cigarový svet helper</p>
+      <h2 id="webshopTitle">Export a product into the log</h2>
+      <p class="subtle">Drag this button to your bookmarks bar. Later, open a cigar product page on Cigarový svet and click the bookmark. It will open Pityu Cigar Log with the cigar details prefilled.</p>
+      <a id="bookmarkletLink" class="primary-btn bookmarklet-link" href="#">＋ Export to Pityu Cigar Log</a>
+      <p class="hint">The bookmarklet reads only the product page you are currently viewing. It cannot permanently change the webshop.</p>
+
+      <details class="manual-import">
+        <summary>Manual JSON import</summary>
+        <p class="hint">You can also paste one exported cigar JSON here and open it in the add form.</p>
+        <textarea id="webshopJson" rows="6" placeholder='{ "name": "SIMON BELTRE CUATRO CAMINOS TORO" }'></textarea>
+        <button id="importWebshopJsonBtn" class="ghost-btn" type="button">Open in add form</button>
+      </details>
+    </div>
+  </div>
+
+  <div id="formModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="formTitle">
+    <form id="cigarForm" class="modal-card form-card">
+      <button id="formClose" class="modal-close" type="button" aria-label="Close form">&times;</button>
+      <h2 id="formTitle">Add cigar</h2>
+      <input id="cigarId" type="hidden">
+
+      <section class="form-webshop-import wide" aria-label="Import from webshop link">
+        <div>
+          <strong>🌐 Import from Cigarový svet</strong>
+          <p class="hint">Paste a product link and it will try to fill the cigar details into this form.</p>
+        </div>
+        <div class="webshop-import-row">
+          <input id="webshopUrlInput" type="url" placeholder="https://obchod.cigarovysvet.sk/product/simon-beltre-cuatro-caminos-toro/">
+          <button id="fetchWebshopBtn" class="ghost-btn" type="button">Fill from link</button>
+        </div>
+        <p id="webshopImportMessage" class="webshop-import-message" aria-live="polite"></p>
+      </section>
+
+      <div class="form-grid">
+        <label class="wide">Name *<input id="name" required placeholder="A.J. Fernandez Días de Gloria Robusto"></label>
+        <label>Status
+          <select id="status">
+            <option value="owned">☘ In humidor</option>
+            <option value="smoked">◉ Smoked</option>
+            <option value="wishlist">☆ Wishlist</option>
+          </select>
+        </label>
+        <label>Quantity<input id="quantity" type="number" min="0" step="1" placeholder="1"></label>
+        <label>Smoking order<input id="logOrder" type="number" min="1" step="1" placeholder="1 = first ever"></label>
+
+        <label>Brand<input id="brand" placeholder="Rocky Patel"></label>
+        <label>Company / maker<input id="company" placeholder="Company, family, factory…"></label>
+        <label>Made in<input id="madeIn" placeholder="Honduras"></label>
+        <label>Vitola / size<input id="vitola" placeholder="Robusto, Toro, Churchill…"></label>
+        <label>Strength
+          <select id="strength">
+            <option value="">Not set</option>
+            <option value="1">1 — very mild</option>
+            <option value="2">2 — mild to medium</option>
+            <option value="3">3 — medium</option>
+            <option value="4">4 — medium to full</option>
+            <option value="5">5 — full</option>
+          </select>
+        </label>
+        <label>Rating
+          <select id="rating">
+            <option value="">Not rated</option>
+            <option value="1">1 / 5</option>
+            <option value="2">2 / 5</option>
+            <option value="3">3 / 5</option>
+            <option value="4">4 / 5</option>
+            <option value="5">5 / 5</option>
+          </select>
+        </label>
+
+        <label>Bought date<input id="boughtDate" type="date"></label>
+        <label>Smoked date<input id="smokedDate" type="date"></label>
+        <label>Price<input id="price" placeholder="€12.50"></label>
+
+        <fieldset class="wide blend-fieldset">
+          <legend>Blend</legend>
+          <p class="hint blend-hint">One field is enough here. For Cigarový svet imports these match: Krycí list, Viazací list, Plnivo.</p>
+          <div class="form-grid tight three-cols">
+            <label>Wrapper<input id="wrapperLeaf" placeholder="Connecticut Ecuador, Maduro, Habano…"></label>
+            <label>Binder<input id="binderLeaf" placeholder="Honduras, Dominican Republic…"></label>
+            <label>Filler<input id="fillerLeaf" placeholder="Honduras, Nicaragua, Dominican Republic…"></label>
+          </div>
+          <input id="wrapperOrigin" type="hidden">
+          <input id="binderOrigin" type="hidden">
+          <input id="fillerOrigin" type="hidden">
+        </fieldset>
+
+        <label class="wide">Taste notes<input id="taste" placeholder="Creamy, cedar, cocoa, pepper, nuts…"></label>
+        <label>Draw<input id="draw" placeholder="Easy, firm, perfect…"></label>
+        <label>Burn<input id="burn" placeholder="Even, wavy, needed touch-up…"></label>
+        <label>Nicotine feel<input id="nicotine" placeholder="Light, relaxed, strong…"></label>
+        <label>Pairing<input id="pairing" placeholder="Espresso, tea, sparkling water…"></label>
+        <label>Product/source link<input id="link" type="url" placeholder="https://…"></label>
+        <label class="wide">Notes<textarea id="notes" rows="4" placeholder="What you noticed, what you liked, what you would compare it to…"></textarea></label>
+
+        <fieldset class="wide image-fieldset">
+          <legend>Photos</legend>
+          <div class="image-editor">
+            <div id="imageCropPreview" class="crop-preview no-photo">No profile photo yet</div>
+            <div class="image-controls">
+              <input id="imageFile" type="hidden">
+              <label class="upload-drop">Upload photo(s)<input id="imageUpload" type="file" accept="image/*" multiple></label>
+              <div id="photoManager" class="photo-manager" aria-live="polite"></div>
+              <div class="slider-grid">
+                <label>Move left / right<input id="imageCropX" type="range" min="-50" max="150" step="1" value="50"></label>
+                <label>Move up / down<input id="imageCropY" type="range" min="-50" max="150" step="1" value="50"></label>
+                <label>Zoom<input id="imageZoom" type="range" min="0.75" max="2.5" step="0.05" value="1"></label>
+              </div>
+              <button id="resetCropBtn" class="ghost-btn small-btn" type="button">Reset profile crop</button>
+              <p class="hint">Choose one photo as the profile photo for cards and lists. The sliders move only that profile crop. Clicking any photo opens the full gallery.</p>
+            </div>
+          </div>
+        </fieldset>
+      </div>
+
+      <div class="form-actions">
+        <button id="deleteBtn" class="danger-btn hidden" type="button">Delete</button>
+        <span class="spacer"></span>
+        <button class="ghost-btn" type="button" id="cancelFormBtn">Cancel</button>
+        <button class="primary-btn" type="submit">Save cigar</button>
+      </div>
+    </form>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase.config.js"></script>
+  <script src="cigars.data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
