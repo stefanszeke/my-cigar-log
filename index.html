@@ -7,6 +7,19 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <svg style="display:none" aria-hidden="true">
+    <symbol id="icon-x" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></symbol>
+    <symbol id="icon-chevron-up" viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"></polyline></symbol>
+    <symbol id="icon-chevron-left" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></symbol>
+    <symbol id="icon-chevron-right" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></symbol>
+    <symbol id="icon-arrow-up" viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></symbol>
+    <symbol id="icon-more-horizontal" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></symbol>
+    <symbol id="icon-plus" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></symbol>
+    <symbol id="icon-minus" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"></line></symbol>
+    <symbol id="icon-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></symbol>
+    <symbol id="icon-upload" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></symbol>
+    <symbol id="icon-log-out" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></symbol>
+  </svg>
   <header class="app-header">
     <nav class="topbar">
       <div class="brand-block">
@@ -19,13 +32,13 @@
       <div class="top-actions">
         <span id="syncStatus" class="sync-status">Local mode</span>
         <span id="accessBadge" class="access-badge hidden" title="Read-only">👁</span>
-        <button id="addBtn" class="primary-btn" type="button">＋ <span class="btn-label">Add</span></button>
+        <button id="addBtn" class="primary-btn" type="button"><svg class="icon" aria-hidden="true"><use href="#icon-plus"></use></svg> <span class="btn-label">Add</span></button>
         <div class="menu-wrap">
-          <button id="moreMenuBtn" class="icon-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="More actions">⋯</button>
+          <button id="moreMenuBtn" class="icon-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="More actions"><svg class="icon" aria-hidden="true"><use href="#icon-more-horizontal"></use></svg></button>
           <div id="moreMenu" class="more-menu hidden" role="menu">
-            <button id="exportBtn" class="menu-item" type="button" role="menuitem">⇩ Export</button>
-            <button id="importBtn" class="menu-item" type="button" role="menuitem">⇧ Import</button>
-            <button id="signOutBtn" class="menu-item hidden" type="button" role="menuitem">↪ Sign out</button>
+            <button id="exportBtn" class="menu-item" type="button" role="menuitem"><svg class="icon" aria-hidden="true"><use href="#icon-download"></use></svg> Export</button>
+            <button id="importBtn" class="menu-item" type="button" role="menuitem"><svg class="icon" aria-hidden="true"><use href="#icon-upload"></use></svg> Import</button>
+            <button id="signOutBtn" class="menu-item hidden" type="button" role="menuitem"><svg class="icon" aria-hidden="true"><use href="#icon-log-out"></use></svg> Sign out</button>
           </div>
         </div>
         <input id="importFile" class="hidden" type="file" accept="application/json,.json">
@@ -36,9 +49,7 @@
   <section id="authPanel" class="auth-panel hidden" aria-live="polite">
     <div class="auth-card">
       <div>
-        <p class="eyebrow">Cloud sync</p>
         <h2>Sign in to your cigar log</h2>
-        <p>Use your Supabase account to sync cigars and photos between devices.</p>
       </div>
       <form id="authForm" class="auth-form">
         <label>Email<input id="authEmail" type="email" autocomplete="email" required placeholder="you@example.com"></label>
@@ -46,7 +57,6 @@
         <div class="auth-actions">
           <button id="signInBtn" class="primary-btn" type="submit">Sign in</button>
         </div>
-        <p class="auth-hint">Private log: existing Supabase users can sign in. Some users may be read-only viewers.</p>
         <p id="authMessage" class="auth-message"></p>
       </form>
     </div>
@@ -54,68 +64,79 @@
 
   <main id="appShell" class="shell">
     <section class="toolbar" aria-label="Cigar log tools">
-      <label class="search-box">
-        <span class="sr-only">Search</span>
-        <input id="search" type="search" placeholder="Search name, brand, country, wrapper, notes…">
-      </label>
-
-      <div class="filter-row">
-        <label class="sr-only" for="statusFilter">Status</label>
-        <select id="statusFilter" class="filter-select">
-          <option value="all">All cigars</option>
-          <option value="owned">☘ In humidor</option>
-          <option value="smoked">◉ Smoked</option>
-          <option value="wishlist">☆ Wishlist</option>
-        </select>
-
-        <div class="sort-group">
-          <label class="sr-only" for="sortBy">Sort</label>
-          <select id="sortBy" class="filter-select">
-            <option value="history">Smoking history</option>
-            <option value="recent">Date added, newest</option>
-            <option value="name">Name A–Z</option>
-            <option value="rating">Best rated</option>
-            <option value="strength">Strength</option>
-          </select>
-          <button id="sortDirBtn" class="icon-btn sort-dir-btn" type="button" aria-label="Sort ascending — click to reverse">↑</button>
-        </div>
-
-        <div class="view-toggle" role="group" aria-label="View mode">
-          <button id="cardViewBtn" type="button" class="active">Cards</button>
-          <button id="listViewBtn" type="button">List</button>
-        </div>
+      <div class="toolbar-head">
+        <span class="toolbar-title">Filters</span>
+        <button id="toolbarToggleBtn" class="icon-btn toolbar-toggle-btn" type="button" aria-expanded="true" aria-controls="toolbarBody" aria-label="Collapse filters"><svg class="icon" aria-hidden="true"><use href="#icon-chevron-up"></use></svg></button>
       </div>
-      <div id="stats" class="stats" aria-live="polite"></div>
+
+      <div id="toolbarBody" class="toolbar-body">
+        <label class="search-box">
+          <span class="sr-only">Search</span>
+          <input id="search" type="search" placeholder="Search name, brand, country, wrapper, notes…">
+        </label>
+
+        <div class="filter-row">
+          <label class="sr-only" for="statusFilter">Status</label>
+          <select id="statusFilter" class="filter-select">
+            <option value="all">All cigars</option>
+            <option value="owned">☘ In humidor</option>
+            <option value="smoked">◉ Smoked</option>
+            <option value="wishlist">☆ Wishlist</option>
+          </select>
+
+          <div class="sort-group">
+            <label class="sr-only" for="sortBy">Sort</label>
+            <select id="sortBy" class="filter-select">
+              <option value="history">Smoking history</option>
+              <option value="recent">Date added, newest</option>
+              <option value="name">Name A–Z</option>
+              <option value="rating">Best rated</option>
+              <option value="strength">Strength</option>
+            </select>
+            <button id="sortDirBtn" class="icon-btn sort-dir-btn" type="button" aria-label="Sort ascending — click to reverse"><svg class="icon" aria-hidden="true"><use href="#icon-arrow-up"></use></svg></button>
+          </div>
+
+          <div class="view-toggle" role="group" aria-label="View mode">
+            <button id="cardViewBtn" type="button" class="active">Cards</button>
+            <button id="listViewBtn" type="button">List</button>
+          </div>
+        </div>
+        <div id="stats" class="stats" aria-live="polite"></div>
+      </div>
     </section>
 
     <section id="results" class="results cards-view" aria-live="polite"></section>
     <p id="empty" class="empty hidden">No cigars found. Try another search or add a new cigar.</p>
+    <div id="loadingState" class="empty loading-state">
+      <span class="loading-spinner" aria-hidden="true"></span>
+      Loading your cigars…
+    </div>
   </main>
 
   <div id="detailModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="detailTitle">
     <div class="modal-card large-modal">
-      <button id="detailClose" class="modal-close" type="button" aria-label="Close details">&times;</button>
+      <button id="detailClose" class="modal-close" type="button" aria-label="Close details"><svg class="icon" aria-hidden="true"><use href="#icon-x"></use></svg></button>
       <div id="detailBody"></div>
     </div>
   </div>
 
   <div id="galleryModal" class="modal gallery-modal hidden" role="dialog" aria-modal="true" aria-label="Image gallery">
     <div class="gallery-card">
-      <button id="galleryClose" class="modal-close gallery-close" type="button" aria-label="Close gallery">&times;</button>
-      <button id="galleryPrev" class="gallery-nav prev" type="button" aria-label="Previous image">‹</button>
+      <button id="galleryClose" class="modal-close gallery-close" type="button" aria-label="Close gallery"><svg class="icon" aria-hidden="true"><use href="#icon-x"></use></svg></button>
+      <button id="galleryPrev" class="gallery-nav prev" type="button" aria-label="Previous image"><svg class="icon" aria-hidden="true"><use href="#icon-chevron-left"></use></svg></button>
       <div id="galleryBody" class="gallery-body"></div>
-      <button id="galleryNext" class="gallery-nav next" type="button" aria-label="Next image">›</button>
+      <button id="galleryNext" class="gallery-nav next" type="button" aria-label="Next image"><svg class="icon" aria-hidden="true"><use href="#icon-chevron-right"></use></svg></button>
       <div id="galleryCounter" class="gallery-counter"></div>
     </div>
   </div>
 
   <div id="webshopModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="webshopTitle">
     <div class="modal-card webshop-card">
-      <button id="webshopClose" class="modal-close" type="button" aria-label="Close webshop importer">&times;</button>
+      <button id="webshopClose" class="modal-close" type="button" aria-label="Close webshop importer"><svg class="icon" aria-hidden="true"><use href="#icon-x"></use></svg></button>
       <p class="eyebrow">Cigarový svet helper</p>
       <h2 id="webshopTitle">Export a product into the log</h2>
       <p class="subtle">Drag this button to your bookmarks bar. Later, open a cigar product page on Cigarový svet and click the bookmark. It will open Pityu Cigar Log with the cigar details prefilled.</p>
-      <a id="bookmarkletLink" class="primary-btn bookmarklet-link" href="#">＋ Export to Pityu Cigar Log</a>
+      <a id="bookmarkletLink" class="primary-btn bookmarklet-link" href="#"><svg class="icon" aria-hidden="true"><use href="#icon-plus"></use></svg> Export to Pityu Cigar Log</a>
       <p class="hint">The bookmarklet reads only the product page you are currently viewing. It cannot permanently change the webshop.</p>
 
       <details class="manual-import">
@@ -129,7 +150,7 @@
 
   <div id="formModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="formTitle">
     <form id="cigarForm" class="modal-card form-card">
-      <button id="formClose" class="modal-close" type="button" aria-label="Close form">&times;</button>
+      <button id="formClose" class="modal-close" type="button" aria-label="Close form"><svg class="icon" aria-hidden="true"><use href="#icon-x"></use></svg></button>
       <h2 id="formTitle">Add cigar</h2>
       <input id="cigarId" type="hidden">
 
@@ -188,7 +209,6 @@
 
         <fieldset class="wide blend-fieldset">
           <legend>Blend</legend>
-          <p class="hint blend-hint">One field is enough here. For Cigarový svet imports these match: Krycí list, Viazací list, Plnivo.</p>
           <div class="form-grid tight three-cols">
             <label>Wrapper<input id="wrapperLeaf" placeholder="Connecticut Ecuador, Maduro, Habano…"></label>
             <label>Binder<input id="binderLeaf" placeholder="Honduras, Dominican Republic…"></label>
@@ -213,21 +233,19 @@
             <div class="crop-editor">
               <div id="imageCropPreview" class="crop-preview no-photo">No profile photo yet</div>
               <div class="crop-toolbar">
-                <button id="cropZoomOutBtn" class="icon-btn small-icon-btn" type="button" aria-label="Zoom out">−</button>
+                <button id="cropZoomOutBtn" class="icon-btn small-icon-btn" type="button" aria-label="Zoom out"><svg class="icon" aria-hidden="true"><use href="#icon-minus"></use></svg></button>
                 <span id="cropZoomValue" class="crop-zoom-value">1.0×</span>
-                <button id="cropZoomInBtn" class="icon-btn small-icon-btn" type="button" aria-label="Zoom in">+</button>
+                <button id="cropZoomInBtn" class="icon-btn small-icon-btn" type="button" aria-label="Zoom in"><svg class="icon" aria-hidden="true"><use href="#icon-plus"></use></svg></button>
                 <button id="resetCropBtn" class="ghost-btn small-btn" type="button">Reset</button>
               </div>
-              <p class="hint">Drag the photo to reposition it. Scroll, pinch, or use +/− to zoom.</p>
               <input id="imageCropX" type="hidden" value="50">
               <input id="imageCropY" type="hidden" value="50">
               <input id="imageZoom" type="hidden" value="1">
             </div>
             <div class="image-controls">
               <input id="imageFile" type="hidden">
-              <label class="upload-drop">Upload photo(s)<input id="imageUpload" type="file" accept="image/*" multiple></label>
+              <label id="uploadDrop" class="upload-drop">Upload photo(s)<input id="imageUpload" type="file" accept="image/*" multiple></label>
               <div id="photoManager" class="photo-manager" aria-live="polite"></div>
-              <p class="hint">Choose one photo as the profile photo for cards and lists. Clicking any photo opens the full gallery.</p>
             </div>
           </div>
         </fieldset>

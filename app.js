@@ -1,6 +1,7 @@
 const IMG_DIR = 'imgs/';
 const STORAGE_KEY = 'cigar-log-v2';
 const VIEW_KEY = 'cigar-log-view';
+const TOOLBAR_KEY = 'cigar-log-toolbar-collapsed';
 const MAX_AUTO_IMAGES_PER_CIGAR = 8;
 const SUPABASE_CONFIG = window.CIGAR_LOG_SUPABASE || { enabled: false };
 
@@ -8,6 +9,7 @@ let supabaseClient = null;
 let currentUser = null;
 let currentAccess = { accessLevel: 'local', ownerId: null };
 let appReady = false;
+let appLoading = true;
 let selectedImageFiles = [];
 let formPhotos = [];
 let deletedPhotoIds = [];
@@ -23,11 +25,15 @@ let sortDir = 'asc';
 const els = {
   results: document.getElementById('results'),
   empty: document.getElementById('empty'),
+  loadingState: document.getElementById('loadingState'),
   stats: document.getElementById('stats'),
   search: document.getElementById('search'),
   statusFilter: document.getElementById('statusFilter'),
   sortBy: document.getElementById('sortBy'),
   sortDirBtn: document.getElementById('sortDirBtn'),
+  toolbar: document.querySelector('.toolbar'),
+  toolbarBody: document.getElementById('toolbarBody'),
+  toolbarToggleBtn: document.getElementById('toolbarToggleBtn'),
   cardViewBtn: document.getElementById('cardViewBtn'),
   listViewBtn: document.getElementById('listViewBtn'),
   addBtn: document.getElementById('addBtn'),
@@ -62,6 +68,7 @@ const els = {
   formTitle: document.getElementById('formTitle'),
   deleteBtn: document.getElementById('deleteBtn'),
   imageUpload: document.getElementById('imageUpload'),
+  uploadDrop: document.getElementById('uploadDrop'),
   imageCropPreview: document.getElementById('imageCropPreview'),
   photoManager: document.getElementById('photoManager'),
   resetCropBtn: document.getElementById('resetCropBtn'),
@@ -638,6 +645,7 @@ async function loadRemoteData() {
   if (currentAccess.accessLevel === 'none') {
     cigars = [];
     setSyncStatus('No cigar access', 'error');
+    appLoading = false;
     render();
     return;
   }
@@ -652,6 +660,8 @@ async function loadRemoteData() {
     console.error(error);
     setSyncStatus('Sync error', 'error');
     alert(`Could not load Supabase cigars: ${error.message}`);
+    appLoading = false;
+    render();
     return;
   }
 
@@ -659,9 +669,9 @@ async function loadRemoteData() {
   await loadRemotePhotos();
   await hydrateImages();
   saveData();
-  const mode = isReadOnlyUser() ? 'Read-only' : 'Cloud';
-  setSyncStatus(`${mode} · ${currentUser.email}`, 'cloud');
+  setSyncStatus(currentUser.email, 'cloud');
   setAccessUi();
+  appLoading = false;
   render();
   maybeOpenPendingWebshopImport();
 }
@@ -821,9 +831,8 @@ function setAuthUi() {
   els.appShell?.classList.toggle('hidden', Boolean(supabaseClient && !cloud));
 
   if (cloud) {
-    if (currentAccess.accessLevel === 'read') setSyncStatus(`Read-only · ${currentUser.email}`, 'cloud');
-    else if (currentAccess.accessLevel === 'none') setSyncStatus('No cigar access', 'error');
-    else setSyncStatus(`Cloud · ${currentUser.email}`, 'cloud');
+    if (currentAccess.accessLevel === 'none') setSyncStatus('No cigar access', 'error');
+    else setSyncStatus(currentUser.email, 'cloud');
   } else if (supabaseClient) {
     setSyncStatus('Sign in required', 'error');
   } else {
@@ -947,10 +956,19 @@ function visibleCigars() {
 function updateSortDirBtn() {
   if (!els.sortDirBtn) return;
   const asc = sortDir === 'asc';
-  els.sortDirBtn.textContent = asc ? '↑' : '↓';
+  els.sortDirBtn.classList.toggle('is-desc', !asc);
   const label = asc ? 'Sort ascending — click to reverse' : 'Sort descending — click to reverse';
   els.sortDirBtn.setAttribute('aria-label', label);
   els.sortDirBtn.title = label;
+}
+
+function setToolbarCollapsed(collapsed) {
+  if (!els.toolbar || !els.toolbarToggleBtn) return;
+  els.toolbar.classList.toggle('collapsed', collapsed);
+  const label = collapsed ? 'Expand filters' : 'Collapse filters';
+  els.toolbarToggleBtn.setAttribute('aria-label', label);
+  els.toolbarToggleBtn.setAttribute('aria-expanded', String(!collapsed));
+  localStorage.setItem(TOOLBAR_KEY, collapsed ? '1' : '0');
 }
 
 function renderStats() {
@@ -1049,14 +1067,15 @@ function render() {
   els.results.className = `results ${viewMode === 'cards' ? 'cards-view' : 'list-view'}`;
   els.cardViewBtn.classList.toggle('active', viewMode === 'cards');
   els.listViewBtn.classList.toggle('active', viewMode === 'list');
-  els.empty.classList.toggle('hidden', list.length > 0);
+  els.loadingState?.classList.toggle('hidden', !appLoading);
+  els.empty.classList.toggle('hidden', appLoading || list.length > 0);
 
   els.results.innerHTML = list.map(viewMode === 'cards' ? cardHtml : listHtml).join('');
 }
 
 function field(label, value) {
   if (!value) return '';
-  return `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd>`;
+  return `<div class="detail-field"><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`;
 }
 
 function detailHtml(cigar) {
@@ -1090,6 +1109,7 @@ function detailHtml(cigar) {
 
         <dl class="detail-list">
           ${field('Smoking order', cigar.logOrder ? `#${cigar.logOrder}` : '')}
+          ${field('Made in', cigar.madeIn)}
           ${field('Vitola / size', cigar.vitola)}
           ${field('Strength', strengthLabel(cigar.strength))}
           ${field('Rating', cigar.rating ? `${cigar.rating} / 5` : '')}
@@ -1622,6 +1642,8 @@ function cleanImportedText(value = '') {
   return String(value || '')
     .replace(/\u00a0/g, ' ')
     .replace(/&nbsp;/gi, ' ')
+    .replace(/\*\*/g, '')
+    .replace(/(?<!!)\[([^\]]*)\]\([^)]*\)/g, '$1')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -1667,6 +1689,14 @@ function lineValueAfterLabel(lines, labels) {
   const wanted = labels.map(normalizeLabel);
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i];
+    const tableRow = /^\|\s*(.+?)\s*\|\s*(.+?)\s*\|$/.exec(line);
+    if (tableRow) {
+      if (wanted.includes(normalizeLabel(tableRow[1]))) {
+        const cellValue = cleanImportedText(tableRow[2]);
+        if (cellValue) return cellValue;
+      }
+      continue;
+    }
     const normalized = normalizeLabel(line);
     for (const label of wanted) {
       if (normalized === label || normalized.startsWith(`${label} `)) {
@@ -1707,6 +1737,23 @@ function guessVitolaFromName(name = '') {
   return known.find((item) => upperName.includes(item.toUpperCase())) || '';
 }
 
+const BRAND_COMPANY_MAP = {
+  [normalizeLabel('C.L.E.')]: 'CLE Cigar Co.',
+  [normalizeLabel('Cohiba')]: 'Habanos, S.A.',
+  [normalizeLabel('Montecristo')]: 'Habanos, S.A.',
+  [normalizeLabel('Partagás')]: 'Habanos, S.A.',
+  [normalizeLabel('Romeo y Julieta')]: 'Habanos, S.A.',
+  [normalizeLabel('Hoyo de Monterrey')]: 'Habanos, S.A.',
+  [normalizeLabel('H. Upmann')]: 'Habanos, S.A.',
+  [normalizeLabel('Trinidad')]: 'Habanos, S.A.',
+  [normalizeLabel('Bolívar')]: 'Habanos, S.A.',
+  [normalizeLabel('Ramón Allones')]: 'Habanos, S.A.'
+};
+
+function guessCompanyFromBrand(brand = '') {
+  return BRAND_COMPANY_MAP[normalizeLabel(brand)] || '';
+}
+
 function imageFromRawProduct(raw = '', doc = null, sourceUrl = '') {
   const fromDoc = doc?.querySelector('meta[property="og:image"], meta[name="twitter:image"]')?.content
     || doc?.querySelector('.woocommerce-product-gallery__image img, img.wp-post-image, .product img')?.getAttribute('src')
@@ -1742,6 +1789,27 @@ function descriptionFromProduct(raw = '', doc = null, lines = [], title = '') {
   return cleanImportedText(collected.join(' '));
 }
 
+function companyFromDescription(doc = null, text = '', title = '') {
+  const panel = doc?.querySelector('#tab-description, .woocommerce-Tabs-panel--description, .woocommerce-product-details__short-description');
+  const heading = panel?.querySelector('h1, h2, h3, h4, strong, b');
+  const fromDoc = cleanImportedText(heading?.innerText || heading?.textContent || '');
+  if (fromDoc && normalizeLabel(fromDoc) !== normalizeLabel(title)) return fromDoc;
+
+  const rawLines = String(text).replace(/\r/g, '\n').split('\n');
+  const popisIndex = rawLines.findIndex((line) => {
+    const normalized = normalizeLabel(line);
+    return normalized === 'popis' || normalized.startsWith('popis ');
+  });
+  if (popisIndex < 0) return '';
+  for (let i = popisIndex + 1; i < Math.min(rawLines.length, popisIndex + 8); i += 1) {
+    const boldOnly = /^\s*\*\*(.+?)\*\*\s*$/.exec(rawLines[i]);
+    if (!boldOnly) continue;
+    const value = cleanImportedText(boldOnly[1]);
+    return value && normalizeLabel(value) !== normalizeLabel(title) ? value : '';
+  }
+  return '';
+}
+
 function parseWebshopProduct(raw = '', sourceUrl = '') {
   const doc = documentFromHtml(raw);
   const text = htmlToPlainText(raw);
@@ -1771,14 +1839,17 @@ function parseWebshopProduct(raw = '', sourceUrl = '') {
   const strength = (strengthText.match(/[1-5]/) || [''])[0];
   const taste = lineValueAfterColon(text, ['Chuť', 'Chut'])
     || lineValueAfterLabel(allLines, ['Chuťový profil', 'Chutovy profil', 'Chuť', 'Chut']);
+  const brand = lineValueAfterLabel(allLines, ['Značky', 'Znacky', 'Značka', 'Znacka']);
+  const company = companyFromDescription(doc, text, name) || guessCompanyFromBrand(brand);
 
   return normalizeCigar({
     name,
     status: 'owned',
     quantity: 1,
-    brand: lineValueAfterLabel(allLines, ['Značky', 'Znacky', 'Značka', 'Znacka']),
+    brand,
+    company,
     madeIn: lineValueAfterLabel(allLines, ['Krajina vyroby', 'Krajina výroby', 'Krajina povodu', 'Krajina pôvodu']),
-    vitola: [vitolaName, dimensions].filter(Boolean).join(' · '),
+    vitola: vitolaName || dimensions,
     strength,
     price: cleanImportedText(doc?.querySelector('.price')?.innerText || '') || firstPriceFromText(text),
     wrapperLeaf: lineValueAfterColon(text, ['Krycí list', 'Kryci list']),
@@ -1991,6 +2062,11 @@ function attachEvents() {
   });
   updateSortDirBtn();
 
+  els.toolbarToggleBtn?.addEventListener('click', () => {
+    setToolbarCollapsed(!els.toolbar.classList.contains('collapsed'));
+  });
+  setToolbarCollapsed(localStorage.getItem(TOOLBAR_KEY) === '1');
+
   els.cardViewBtn.addEventListener('click', () => {
     viewMode = 'cards';
     localStorage.setItem(VIEW_KEY, viewMode);
@@ -2082,6 +2158,35 @@ function attachEvents() {
     }
   });
 
+  if (els.uploadDrop) {
+    let dragDepth = 0;
+    els.uploadDrop.addEventListener('dragenter', (event) => {
+      event.preventDefault();
+      dragDepth += 1;
+      els.uploadDrop.classList.add('drag-over');
+    });
+    els.uploadDrop.addEventListener('dragover', (event) => {
+      event.preventDefault();
+    });
+    els.uploadDrop.addEventListener('dragleave', (event) => {
+      event.preventDefault();
+      dragDepth = Math.max(0, dragDepth - 1);
+      if (dragDepth === 0) els.uploadDrop.classList.remove('drag-over');
+    });
+    els.uploadDrop.addEventListener('drop', async (event) => {
+      event.preventDefault();
+      dragDepth = 0;
+      els.uploadDrop.classList.remove('drag-over');
+      const files = Array.from(event.dataTransfer?.files || []).filter((file) => file.type.startsWith('image/'));
+      if (!files.length) return;
+      try {
+        await addFilesToFormPhotos(files);
+      } catch (error) {
+        alert(`Could not read image: ${error.message}`);
+      }
+    });
+  }
+
   els.photoManager?.addEventListener('click', (event) => {
     const profileBtn = event.target.closest('[data-profile-photo]');
     if (profileBtn) {
@@ -2142,10 +2247,12 @@ async function init() {
   } else if (!cloudConfigured) {
     cigars = loadData();
     await hydrateImages();
+    appLoading = false;
     render();
     maybeOpenPendingWebshopImport();
   } else {
     cigars = [];
+    appLoading = false;
     render();
   }
   maybeOpenPendingWebshopImport();
