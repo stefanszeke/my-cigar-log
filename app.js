@@ -70,6 +70,8 @@ const els = {
   imageUpload: document.getElementById('imageUpload'),
   uploadDrop: document.getElementById('uploadDrop'),
   imageCropPreview: document.getElementById('imageCropPreview'),
+  cropEditor: document.querySelector('.crop-editor'),
+  cropEditToggle: document.getElementById('cropEditToggle'),
   photoManager: document.getElementById('photoManager'),
   resetCropBtn: document.getElementById('resetCropBtn'),
   cropZoomValue: document.getElementById('cropZoomValue'),
@@ -168,9 +170,15 @@ function strengthLabel(value) {
   return labels[key] ? `${key}/5 · ${labels[key]}` : '';
 }
 
+function strengthTagInner(value, fallback = '') {
+  const label = strengthLabel(value);
+  const icon = '<svg class="icon" aria-hidden="true"><use href="#icon-flame"></use></svg>';
+  return label ? `${icon}${escapeHtml(label)}` : escapeHtml(fallback);
+}
+
 function stars(value) {
   const rating = Number(value);
-  if (!rating) return '<span class="muted">Not rated</span>';
+  if (!rating) return '<span class="muted"></span>';
   return `<span class="stars" title="${rating}/5">${'★'.repeat(rating)}${'☆'.repeat(5 - rating)}</span>`;
 }
 
@@ -994,10 +1002,10 @@ function blendLine(cigar) {
   const filler = [cigar.fillerLeaf, cigar.fillerOrigin].filter(Boolean).join(' · ');
 
   return [
-    cigar.madeIn ? `<span class="made-in-chip"><b>Made in</b> ${escapeHtml(cigar.madeIn)}</span>` : '',
-    wrapper ? `<span><b>Wrapper</b> ${escapeHtml(wrapper)}</span>` : '',
-    binder ? `<span><b>Binder</b> ${escapeHtml(binder)}</span>` : '',
-    filler ? `<span><b>Filler</b> ${escapeHtml(filler)}</span>` : ''
+    cigar.madeIn ? `<span class="made-in-chip" title="Made in ${escapeHtml(cigar.madeIn)}"><b>Made in</b> ${escapeHtml(cigar.madeIn)}</span>` : '',
+    wrapper ? `<span title="Wrapper ${escapeHtml(wrapper)}"><b>Wrapper</b> ${escapeHtml(wrapper)}</span>` : '',
+    binder ? `<span title="Binder ${escapeHtml(binder)}"><b>Binder</b> ${escapeHtml(binder)}</span>` : '',
+    filler ? `<span title="Filler ${escapeHtml(filler)}"><b>Filler</b> ${escapeHtml(filler)}</span>` : ''
   ].filter(Boolean).join('');
 }
 
@@ -1023,14 +1031,13 @@ function cardHtml(cigar) {
       <div class="card-body">
         <div class="card-topline">
           ${statusPill(cigar.status)}
-          <span>${historyBadge(cigar)}${stars(cigar.rating)}</span>
+          <span>${stars(cigar.rating)} ${historyBadge(cigar)}</span>
         </div>
         <h3>${escapeHtml(cigar.name)}</h3>
-        <p class="meta-line">${escapeHtml([cigar.brand, cigar.madeIn].filter(Boolean).join(' · '))}</p>
-        <p class="subtle">${escapeHtml([cigar.company, cigar.vitola].filter(Boolean).join(' · '))}</p>
-        <div class="blend-chips">${blendLine(cigar)}</div>
+        <p class="meta-line">${escapeHtml([cigar.brand].filter(Boolean).join(' · '))}</p>
+        <div class="blend-chips blend-chips-card">${blendLine(cigar)}</div>
         <div class="card-footer">
-          <span>${strengthLabel(cigar.strength) || 'Strength not set'}</span>
+          <span class="strength-tag">${strengthTagInner(cigar.strength, 'Strength not set')}</span>
           ${canEditCigar(cigar) ? `<button class="text-btn edit-btn" type="button" data-edit="${escapeHtml(cigar.id)}">Edit</button>` : '<span class="read-only-text">Read-only</span>'}
         </div>
       </div>
@@ -1045,14 +1052,14 @@ function listHtml(cigar) {
       <div class="row-main">
         <div class="row-title">
           <h3>${historyBadge(cigar)}${escapeHtml(cigar.name)}</h3>
-          ${statusPill(cigar.status)}
-        </div>
-        <p class="meta-line">${escapeHtml([cigar.brand, cigar.company, cigar.madeIn, cigar.vitola].filter(Boolean).join(' · '))}</p>
-        <div class="blend-chips compact">${blendLine(cigar)}</div>
-      </div>
-      <div class="row-side">
-        <div>${stars(cigar.rating)}</div>
-        <div class="subtle">${strengthLabel(cigar.strength) || 'No strength'}</div>
+          </div>
+          <p class="meta-line">${escapeHtml([cigar.brand, cigar.company, cigar.madeIn, cigar.vitola].filter(Boolean).join(' · '))}</p>
+          <div class="blend-chips compact">${blendLine(cigar)}</div>
+          </div>
+          <div class="row-side">
+
+        <div>${stars(cigar.rating)} ${statusPill(cigar.status)}</div>
+        <div class="subtle strength-tag">${strengthTagInner(cigar.strength, 'No strength')}</div>
         ${canEditCigar(cigar) ? `<button class="text-btn edit-btn" type="button" data-edit="${escapeHtml(cigar.id)}">Edit</button>` : '<span class="read-only-text">Read-only</span>'}
       </div>
     </article>
@@ -1229,7 +1236,12 @@ function attachCropInteractions() {
   const el = els.imageCropPreview;
   if (!el) return;
 
+  els.cropEditToggle?.addEventListener('change', () => {
+    els.cropEditor?.classList.toggle('crop-edit-enabled', els.cropEditToggle.checked);
+  });
+
   el.addEventListener('pointerdown', (event) => {
+    if (!els.cropEditToggle?.checked) return;
     if (!currentFormCropImg()) return;
     if (event.pointerType === 'mouse' && event.button !== 0) return;
     cropPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
@@ -1290,6 +1302,7 @@ function attachCropInteractions() {
   el.addEventListener('pointercancel', endCropPointer);
 
   el.addEventListener('wheel', (event) => {
+    if (!els.cropEditToggle?.checked) return;
     if (!currentFormCropImg()) return;
     event.preventDefault();
     const zoom = Number(document.getElementById('imageZoom').value || 1);
@@ -1414,6 +1427,7 @@ function openForm(id = '', prefill = null) {
   deletedPhotoIds = [];
   deletedPhotoPaths = [];
   els.cigarForm.reset();
+  els.cropEditor?.classList.remove('crop-edit-enabled');
   if (els.imageUpload) els.imageUpload.value = '';
   if (els.webshopUrlInput) els.webshopUrlInput.value = '';
   setWebshopImportMessage('');
