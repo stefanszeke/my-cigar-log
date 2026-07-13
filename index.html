@@ -46,8 +46,11 @@
       </div>
     </nav>
     <nav id="sectionTabs" class="section-tabs" aria-label="Section">
-      <button id="cigarsTabBtn" type="button" class="section-tab active" data-section="cigars">Cigars</button>
-      <button id="galleryTabBtn" type="button" class="section-tab" data-section="gallery">Gallery</button>
+      <div class="tab-group">
+        <button id="cigarsTabBtn" type="button" class="section-tab active" data-section="cigars">Cigars</button>
+        <button id="galleryTabBtn" type="button" class="section-tab" data-section="gallery">Gallery</button>
+      </div>
+      <div id="stats" class="stats" aria-live="polite"></div>
     </nav>
   </header>
 
@@ -71,7 +74,13 @@
     <section class="toolbar" aria-label="Cigar log tools">
       <div class="toolbar-head">
         <span class="toolbar-title">Filters</span>
-        <button id="toolbarToggleBtn" class="icon-btn toolbar-toggle-btn" type="button" aria-expanded="true" aria-controls="toolbarBody" aria-label="Collapse filters"><svg class="icon" aria-hidden="true"><use href="#icon-chevron-up"></use></svg></button>
+        <div class="toolbar-head-actions">
+          <div class="view-toggle" role="group" aria-label="View mode">
+            <button id="cardViewBtn" type="button" class="active">Cards</button>
+            <button id="listViewBtn" type="button">List</button>
+          </div>
+          <button id="toolbarToggleBtn" class="icon-btn toolbar-toggle-btn" type="button" aria-expanded="true" aria-controls="toolbarBody" aria-label="Collapse filters"><svg class="icon" aria-hidden="true"><use href="#icon-chevron-up"></use></svg></button>
+        </div>
       </div>
 
       <div id="toolbarBody" class="toolbar-body">
@@ -100,13 +109,7 @@
             </select>
             <button id="sortDirBtn" class="icon-btn sort-dir-btn" type="button" aria-label="Sort ascending — click to reverse"><svg class="icon" aria-hidden="true"><use href="#icon-arrow-up"></use></svg></button>
           </div>
-
-          <div class="view-toggle" role="group" aria-label="View mode">
-            <button id="cardViewBtn" type="button" class="active">Cards</button>
-            <button id="listViewBtn" type="button">List</button>
-          </div>
         </div>
-        <div id="stats" class="stats" aria-live="polite"></div>
       </div>
     </section>
 

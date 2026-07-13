@@ -474,6 +474,7 @@ function updateAddBtnVisibility() {
 function updateSectionVisibility() {
   const authGated = Boolean(supabaseClient && !currentUser);
   els.sectionTabs?.classList.toggle('hidden', authGated);
+  els.stats?.classList.toggle('hidden', currentSection !== 'cigars');
   els.appShell?.classList.toggle('hidden', authGated || currentSection !== 'cigars');
   els.galleryShell?.classList.toggle('hidden', authGated || currentSection !== 'gallery');
   els.cigarsTabBtn?.classList.toggle('active', currentSection === 'cigars');
@@ -2346,7 +2347,7 @@ function attachEvents() {
   els.toolbarToggleBtn?.addEventListener('click', () => {
     setToolbarCollapsed(!els.toolbar.classList.contains('collapsed'));
   });
-  setToolbarCollapsed(localStorage.getItem(TOOLBAR_KEY) === '1');
+  setToolbarCollapsed(localStorage.getItem(TOOLBAR_KEY) !== '0');
 
   els.cardViewBtn.addEventListener('click', () => {
     viewMode = 'cards';

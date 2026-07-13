@@ -16,6 +16,7 @@ body {
     sans-serif;
   color: var(--text);
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 button,
@@ -230,6 +231,11 @@ button {
   letter-spacing: 0.08em;
   color: var(--text-muted);
 }
+.toolbar-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
 .toolbar-toggle-btn {
   min-height: 26px;
   min-width: 26px;
@@ -237,9 +243,6 @@ button {
 }
 .toolbar-body {
   display: contents;
-}
-.toolbar.collapsed .toolbar-body {
-  display: none;
 }
 
 .icon {
@@ -325,10 +328,6 @@ button {
   min-width: 34px;
   flex-shrink: 0;
   font-size: 0.95rem;
-}
-
-.filter-row .view-toggle {
-  flex: 0 0 auto;
 }
 
 label span,
@@ -419,18 +418,18 @@ textarea:focus {
 
 .view-toggle {
   display: flex;
-  padding: 0.16rem;
+  padding: 1px 0;
   background: #eef2ec;
   border-radius: 9px;
   border: 1px solid var(--line-strong);
 }
 .view-toggle button {
-  min-height: 30px;
+  min-height: 26px;
   background: transparent;
   color: var(--text-muted);
-  padding: 0.3rem 0.6rem;
+  padding: 0.2rem 0.55rem;
   box-shadow: none;
-  font-size: 0.86rem;
+  font-size: 0.8rem;
 }
 .view-toggle button.active {
   background: var(--surface);
@@ -1497,7 +1496,7 @@ body[data-access-level="read"] .cigar-row {
 
 .gallery-upload-drop {
   min-height: 120px;
-  margin: 0 0 0.85rem;
+  margin: 0.85rem;
 }
 .gallery-grid {
   display: grid;
@@ -1581,9 +1580,39 @@ body[data-access-level="read"] .cigar-row {
 }
 
 .app-header {
-  background: rgba(255, 255, 255, 0.86);
-  border-bottom: 1px solid rgba(229, 231, 235, 0.9);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.85);
+  background: rgb(37, 37, 37);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.app-header .eyebrow {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.app-header .sync-status {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.78);
+}
+.app-header .sync-status::before {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.app-header .access-badge {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.app-header .icon-btn {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.85);
+}
+.app-header .icon-btn:hover {
+  border-color: rgba(255, 255, 255, 0.32);
+  background: rgba(255, 255, 255, 0.16);
 }
 
 .topbar {
@@ -1617,8 +1646,8 @@ body[data-access-level="read"] .cigar-row {
   display: grid;
   place-items: center;
   border-radius: 9px;
-  background: var(--accent-soft);
-  color: var(-rgb(255, 233, 192) ent);
+  background: var(--accent);
+  color: #ffffff;
   font-weight: 950;
   letter-spacing: -0.05em;
 }
@@ -1632,6 +1661,7 @@ body[data-access-level="read"] .cigar-row {
   font-size: clamp(1.04rem, 1.8vw, 1.32rem);
   letter-spacing: -0.045em;
   line-height: 1.05;
+  color: #f5f5f5;
 }
 
 .eyebrow {
@@ -1653,10 +1683,22 @@ body[data-access-level="read"] .cigar-row {
 
 .section-tabs {
   display: flex;
-  gap: 1.4rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
   max-width: 1180px;
   margin: 0 auto;
   padding: 0 clamp(1rem, 4vw, 3rem);
+}
+.tab-group {
+  display: flex;
+  align-items: center;
+  gap: 1.4rem;
+  min-width: 0;
+}
+.section-tabs .stats {
+  flex-shrink: 1;
+  min-width: 0;
 }
 .section-tab {
   min-height: 38px;
@@ -1666,23 +1708,23 @@ body[data-access-level="read"] .cigar-row {
   border-radius: 0;
   padding: 0.5rem 0.05rem;
   background: transparent;
-  color: var(--text-muted);
+  color: rgba(255, 255, 255, 0.5);
   font-size: 0.86rem;
   font-weight: 700;
 }
 .section-tab:hover {
-  color: var(--accent-dark);
+  color: rgba(255, 255, 255, 0.85);
 }
 .section-tab.active {
-  color: var(--text);
-  border-bottom-color: var(--accent-dark);
+  color: #f5f5f5;
+  border-bottom-color: var(--accent);
   font-weight: 800;
 }
 
 .shell {
   max-width: 1180px;
   margin: 0 auto;
-  padding: 1rem clamp(1rem, 4vw, 3rem) 3rem;
+  padding: 0 clamp(1rem, 4vw, 3rem) 3rem;
 }
 
 .toolbar {
@@ -1694,12 +1736,27 @@ body[data-access-level="read"] .cigar-row {
   align-items: center;
   gap: 0.4rem;
   margin: 0 0 0.6rem;
-  padding: 0.42rem 0.5rem;
-  border: 1px solid rgba(229, 231, 235, 0.95);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.86);
-  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.05);
-  backdrop-filter: blur(18px);
+  padding: 0.5rem 0.5rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+.toolbar::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 100vw;
+  transform: translateX(-50%);
+  background: #ffffff;
+  border-bottom: 1px solid var(--line);
+  z-index: -1;
+}
+.toolbar.collapsed .toolbar-body {
+  display: none;
 }
 
 .search-box {
@@ -1717,10 +1774,9 @@ body[data-access-level="read"] .cigar-row {
   min-width: min(100%, 480px);
 }
 
-.toolbar .stats {
-  grid-column: 1 / -1;
+.section-tabs .stats {
   display: flex;
-  justify-content: center;
+  justify-content: flex-end;
   gap: 0.32rem;
   padding: 0;
   overflow-x: auto;
@@ -1742,6 +1798,17 @@ body[data-access-level="read"] .cigar-row {
   font-size: 0.76rem;
   color: var(--text);
   letter-spacing: -0.025em;
+}
+
+.app-header .stats article {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+}
+.app-header .stats strong {
+  color: #f5f5f5;
+}
+.app-header .stats span {
+  color: rgba(255, 255, 255, 0.55);
 }
 
 .stats span {
@@ -1898,6 +1965,11 @@ fieldset,
   border-radius: 10px;
 }
 
+.toolbar input, select, button {
+
+}
+
+
 @media (max-width: 900px) {
   .toolbar {
     grid-template-columns: 1fr;
@@ -1932,7 +2004,7 @@ fieldset,
   }
   .toolbar {
     padding: 0.36rem 0.42rem;
-    border-radius: 9px;
+    border-radius: 0;
     gap: 0.3rem;
   }
   .search-box input {
@@ -1942,7 +2014,13 @@ fieldset,
   .sort-dir-btn {
     min-height: 32px;
   }
-  .toolbar .stats {
+  .section-tabs {
+    gap: 0.5rem;
+  }
+  .tab-group {
+    gap: 0.9rem;
+  }
+  .section-tabs .stats {
     gap: 0.28rem;
   }
   .stats article {
