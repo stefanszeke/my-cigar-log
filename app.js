@@ -2,6 +2,7 @@ const IMG_DIR = 'imgs/';
 const STORAGE_KEY = 'cigar-log-v2';
 const VIEW_KEY = 'cigar-log-view';
 const TOOLBAR_KEY = 'cigar-log-toolbar-collapsed';
+const GALLERY_STORAGE_KEY = 'cigar-log-gallery-v1';
 const MAX_AUTO_IMAGES_PER_CIGAR = 8;
 const SUPABASE_CONFIG = window.CIGAR_LOG_SUPABASE || { enabled: false };
 
@@ -21,6 +22,10 @@ let cropDrag = null;
 let cropPinchStart = null;
 const SORT_DEFAULT_DIR = { history: 'asc', recent: 'desc', name: 'asc', rating: 'desc', strength: 'desc' };
 let sortDir = 'asc';
+let currentSection = 'cigars';
+let galleryPhotos = [];
+let galleryLoaded = false;
+let galleryLoading = false;
 
 const els = {
   results: document.getElementById('results'),
@@ -85,7 +90,16 @@ const els = {
   authForm: document.getElementById('authForm'),
   authEmail: document.getElementById('authEmail'),
   authPassword: document.getElementById('authPassword'),
-  authMessage: document.getElementById('authMessage')
+  authMessage: document.getElementById('authMessage'),
+  sectionTabs: document.getElementById('sectionTabs'),
+  cigarsTabBtn: document.getElementById('cigarsTabBtn'),
+  galleryTabBtn: document.getElementById('galleryTabBtn'),
+  galleryShell: document.getElementById('galleryShell'),
+  galleryGrid: document.getElementById('galleryGrid'),
+  galleryEmpty: document.getElementById('galleryEmpty'),
+  galleryLoadingState: document.getElementById('galleryLoadingState'),
+  galleryUpload: document.getElementById('galleryUpload'),
+  galleryUploadDrop: document.getElementById('galleryUploadDrop')
 };
 
 const formFields = [
@@ -101,6 +115,7 @@ let selectedImageData = ''; // legacy single-photo/local preview fallback
 let galleryImages = [];
 let galleryIndex = 0;
 let galleryTitle = '';
+let galleryCaptions = [];
 
 function escapeHtml(value = '') {
   return String(value)
@@ -441,11 +456,35 @@ function setAccessUi() {
   const readOnly = isReadOnlyUser();
   const loggedOut = Boolean(supabaseClient && !currentUser);
   document.body.dataset.accessLevel = currentAccess.accessLevel || 'local';
-  els.addBtn?.classList.toggle('hidden', loggedOut || readOnly || (supabaseClient && currentUser && !canWrite()));
+  updateAddBtnVisibility();
   els.importBtn?.classList.toggle('hidden', loggedOut || readOnly || (supabaseClient && currentUser && !canWrite()));
   els.webshopBtn?.classList.toggle('hidden', loggedOut || readOnly || (supabaseClient && currentUser && !canWrite()));
   els.exportBtn?.classList.toggle('hidden', loggedOut || readOnly);
   els.accessBadge?.classList.toggle('hidden', !readOnly);
+  els.galleryUploadDrop?.classList.toggle('hidden', !canWrite());
+}
+
+function updateAddBtnVisibility() {
+  const readOnly = isReadOnlyUser();
+  const loggedOut = Boolean(supabaseClient && !currentUser);
+  const hidden = currentSection !== 'cigars' || loggedOut || readOnly || (supabaseClient && currentUser && !canWrite());
+  els.addBtn?.classList.toggle('hidden', hidden);
+}
+
+function updateSectionVisibility() {
+  const authGated = Boolean(supabaseClient && !currentUser);
+  els.sectionTabs?.classList.toggle('hidden', authGated);
+  els.appShell?.classList.toggle('hidden', authGated || currentSection !== 'cigars');
+  els.galleryShell?.classList.toggle('hidden', authGated || currentSection !== 'gallery');
+  els.cigarsTabBtn?.classList.toggle('active', currentSection === 'cigars');
+  els.galleryTabBtn?.classList.toggle('active', currentSection === 'gallery');
+  updateAddBtnVisibility();
+}
+
+function setSection(section) {
+  currentSection = section === 'gallery' ? 'gallery' : 'cigars';
+  updateSectionVisibility();
+  if (currentSection === 'gallery') ensureGalleryLoaded();
 }
 
 async function loadAccess() {
@@ -830,13 +869,224 @@ async function deleteRemoteCigar(cigar) {
   await deleteRemoteImages(paths);
 }
 
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error || new Error('Could not read image file.'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+function galleryPhotoRowToPhoto(row = {}) {
+  return {
+    id: row.id,
+    imagePath: row.image_path,
+    note: row.note || '',
+    sortOrder: row.sort_order ?? 0
+  };
+}
+
+function galleryPhotoToRow(photo, ownerId) {
+  return {
+    id: photo.id,
+    user_id: ownerId,
+    image_path: photo.imagePath,
+    note: photo.note || null,
+    sort_order: Number(photo.sortOrder || 0)
+  };
+}
+
+function loadGalleryPhotosLocal() {
+  const saved = localStorage.getItem(GALLERY_STORAGE_KEY);
+  if (!saved) return [];
+  try {
+    const parsed = JSON.parse(saved);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.warn('Could not read saved gallery photos.', error);
+    return [];
+  }
+}
+
+function saveGalleryPhotosLocal() {
+  localStorage.setItem(GALLERY_STORAGE_KEY, JSON.stringify(galleryPhotos, null, 2));
+}
+
+async function loadRemoteGalleryPhotos() {
+  if (!supabaseClient || !currentUser) return;
+  const { data, error } = await supabaseClient
+    .from('gallery_photos')
+    .select('*')
+    .order('sort_order', { ascending: true });
+
+  if (error) {
+    console.warn('Could not load gallery_photos.', error);
+    return;
+  }
+
+  const photos = (data || []).map(galleryPhotoRowToPhoto);
+  for (const photo of photos) {
+    photo.signedUrl = await signedImageUrl(photo.imagePath);
+  }
+  galleryPhotos = photos;
+}
+
+async function ensureGalleryLoaded() {
+  if (galleryLoaded || galleryLoading) return;
+  galleryLoading = true;
+  renderGalleryGrid();
+
+  if (supabaseClient && currentUser) {
+    await loadRemoteGalleryPhotos();
+  } else {
+    galleryPhotos = loadGalleryPhotosLocal();
+  }
+
+  galleryLoaded = true;
+  galleryLoading = false;
+  renderGalleryGrid();
+}
+
+async function addGalleryPhotos(files) {
+  const fileList = Array.from(files || []).filter(Boolean);
+  if (!fileList.length || !canWrite()) return;
+
+  if (supabaseClient && currentUser) {
+    for (const file of fileList) {
+      try {
+        const compressed = await compressImage(file);
+        const path = `${currentUser.id}/gallery/${Date.now()}-${slugify(file.name || 'photo')}.${compressed.extension}`;
+        const { error: uploadError } = await supabaseClient.storage
+          .from(SUPABASE_CONFIG.bucket || 'cigar-photos')
+          .upload(path, compressed.blob, { contentType: compressed.contentType, upsert: false });
+        if (uploadError) throw uploadError;
+
+        const photo = { id: newId('gallery'), imagePath: path, note: '', sortOrder: galleryPhotos.length };
+        const { error: insertError } = await supabaseClient
+          .from('gallery_photos')
+          .insert(galleryPhotoToRow(photo, currentUser.id));
+        if (insertError) throw insertError;
+
+        photo.signedUrl = await signedImageUrl(path);
+        galleryPhotos.push(photo);
+      } catch (error) {
+        console.error(error);
+        alert(`Could not upload photo: ${error.message}`);
+      }
+    }
+  } else {
+    for (const file of fileList) {
+      try {
+        const compressed = await compressImage(file);
+        const dataUrl = await blobToDataUrl(compressed.blob);
+        galleryPhotos.push({ id: newId('gallery'), dataUrl, note: '', sortOrder: galleryPhotos.length });
+      } catch (error) {
+        console.error(error);
+      }
+    }
+    saveGalleryPhotosLocal();
+  }
+
+  galleryLoaded = true;
+  renderGalleryGrid();
+}
+
+async function updateGalleryNote(id, note) {
+  if (!canWrite()) return;
+  const photo = galleryPhotos.find((item) => String(item.id) === String(id));
+  if (!photo) return;
+  photo.note = note;
+
+  if (supabaseClient && currentUser) {
+    const { error } = await supabaseClient
+      .from('gallery_photos')
+      .update({ note: note || null })
+      .eq('id', id)
+      .eq('user_id', currentUser.id);
+    if (error) {
+      console.error(error);
+      alert(`Could not save note: ${error.message}`);
+    }
+  } else {
+    saveGalleryPhotosLocal();
+  }
+}
+
+async function deleteGalleryPhotoById(id) {
+  if (!canWrite()) return;
+  const photo = galleryPhotos.find((item) => String(item.id) === String(id));
+  if (!photo) return;
+  if (!confirm('Delete this photo?')) return;
+
+  if (supabaseClient && currentUser) {
+    const { error } = await supabaseClient
+      .from('gallery_photos')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', currentUser.id);
+    if (error) {
+      console.error(error);
+      alert(`Could not delete photo: ${error.message}`);
+      return;
+    }
+    if (photo.imagePath) await deleteRemoteImage(photo.imagePath);
+  }
+
+  galleryPhotos = galleryPhotos.filter((item) => String(item.id) !== String(id));
+  if (!supabaseClient || !currentUser) saveGalleryPhotosLocal();
+  renderGalleryGrid();
+}
+
+function renderGalleryGrid() {
+  if (!els.galleryGrid) return;
+  const writable = canWrite();
+
+  if (galleryLoading) {
+    els.galleryGrid.innerHTML = '';
+    els.galleryEmpty?.classList.add('hidden');
+    els.galleryLoadingState?.classList.remove('hidden');
+    return;
+  }
+  els.galleryLoadingState?.classList.add('hidden');
+
+  if (!galleryPhotos.length) {
+    els.galleryGrid.innerHTML = '';
+    els.galleryEmpty?.classList.remove('hidden');
+    return;
+  }
+  els.galleryEmpty?.classList.add('hidden');
+
+  els.galleryGrid.innerHTML = galleryPhotos.map((photo, index) => {
+    const src = photoSrc(photo);
+    const note = escapeHtml(photo.note || '');
+    const noteField = writable
+      ? `<input class="gallery-note-input" type="text" value="${note}" placeholder="Add a note…" data-note-id="${escapeHtml(photo.id)}">`
+      : `<span class="gallery-note-text">${note}</span>`;
+    const deleteBtn = writable
+      ? `<button class="text-btn gallery-delete-btn" type="button" data-delete-id="${escapeHtml(photo.id)}">Delete</button>`
+      : '';
+    return `
+      <article class="gallery-tile" data-id="${escapeHtml(photo.id)}">
+        <button class="gallery-tile-photo" type="button" data-gallery-photo-index="${index}" aria-label="Open photo">
+          <img src="${escapeHtml(src)}" alt="${note || 'Gallery photo'}">
+        </button>
+        <div class="gallery-tile-footer">
+          ${noteField}
+          ${deleteBtn}
+        </div>
+      </article>
+    `;
+  }).join('');
+}
+
 function setAuthUi() {
   const cloud = Boolean(supabaseClient && currentUser);
   const loggedOut = Boolean(supabaseClient && !currentUser);
   els.signOutBtn?.classList.toggle('hidden', !cloud);
   els.moreMenuBtn?.classList.toggle('hidden', loggedOut);
   els.authPanel?.classList.toggle('hidden', !supabaseClient || cloud);
-  els.appShell?.classList.toggle('hidden', Boolean(supabaseClient && !cloud));
+  updateSectionVisibility();
 
   if (cloud) {
     if (currentAccess.accessLevel === 'none') setSyncStatus('No cigar access', 'error');
@@ -1605,20 +1855,37 @@ function importLog(file) {
   reader.readAsText(file);
 }
 
-function openGallery(id, index = 0) {
-  const cigar = cigars.find((item) => item.id === id);
-  if (!cigar || !cigar.images?.length) return;
-  galleryImages = cigar.images;
+function openGallery(images, index, title, captions = []) {
+  if (!images?.length) return;
+  galleryImages = images;
   galleryIndex = Math.min(Math.max(Number(index) || 0, 0), galleryImages.length - 1);
-  galleryTitle = cigar.name;
+  galleryTitle = title;
+  galleryCaptions = captions;
   renderGallery();
   els.galleryModal.classList.remove('hidden');
 }
 
+function openCigarGallery(id, index = 0) {
+  const cigar = cigars.find((item) => item.id === id);
+  if (!cigar || !cigar.images?.length) return;
+  openGallery(cigar.images, index, cigar.name);
+}
+
+function openGeneralGallery(index = 0) {
+  if (!galleryPhotos.length) return;
+  openGallery(
+    galleryPhotos.map((photo) => photoSrc(photo)),
+    index,
+    'Gallery',
+    galleryPhotos.map((photo) => photo.note || '')
+  );
+}
+
 function renderGallery() {
   const src = galleryImages[galleryIndex];
-  els.galleryBody.innerHTML = `<img src="${escapeHtml(src)}" alt="${escapeHtml(galleryTitle)} full image">`;
-  els.galleryCounter.textContent = `${galleryTitle} · ${galleryIndex + 1} / ${galleryImages.length}`;
+  const caption = galleryCaptions[galleryIndex] || galleryTitle;
+  els.galleryBody.innerHTML = `<img src="${escapeHtml(src)}" alt="${escapeHtml(caption)} full image">`;
+  els.galleryCounter.textContent = `${caption} · ${galleryIndex + 1} / ${galleryImages.length}`;
   const multiple = galleryImages.length > 1;
   els.galleryPrev.classList.toggle('hidden', !multiple);
   els.galleryNext.classList.toggle('hidden', !multiple);
@@ -2110,11 +2377,34 @@ function attachEvents() {
   els.authForm?.addEventListener('submit', signIn);
   els.signOutBtn?.addEventListener('click', signOut);
 
+  els.cigarsTabBtn?.addEventListener('click', () => setSection('cigars'));
+  els.galleryTabBtn?.addEventListener('click', () => setSection('gallery'));
+
+  els.galleryUpload?.addEventListener('change', async (event) => {
+    await addGalleryPhotos(event.target.files);
+    event.target.value = '';
+  });
+
+  els.galleryGrid?.addEventListener('click', (event) => {
+    const deleteBtn = event.target.closest('[data-delete-id]');
+    if (deleteBtn) {
+      deleteGalleryPhotoById(deleteBtn.dataset.deleteId);
+      return;
+    }
+    const photoBtn = event.target.closest('[data-gallery-photo-index]');
+    if (photoBtn) openGeneralGallery(Number(photoBtn.dataset.galleryPhotoIndex));
+  });
+
+  els.galleryGrid?.addEventListener('change', (event) => {
+    const noteInput = event.target.closest('[data-note-id]');
+    if (noteInput) updateGalleryNote(noteInput.dataset.noteId, noteInput.value.trim());
+  });
+
   els.results.addEventListener('click', (event) => {
     const galleryBtn = event.target.closest('[data-gallery-id]');
     if (galleryBtn) {
       event.stopPropagation();
-      openGallery(galleryBtn.dataset.galleryId, galleryBtn.dataset.galleryIndex);
+      openCigarGallery(galleryBtn.dataset.galleryId, galleryBtn.dataset.galleryIndex);
       return;
     }
 
@@ -2133,7 +2423,7 @@ function attachEvents() {
     const galleryBtn = event.target.closest('[data-gallery-id]');
     if (galleryBtn) {
       event.stopPropagation();
-      openGallery(galleryBtn.dataset.galleryId, galleryBtn.dataset.galleryIndex);
+      openCigarGallery(galleryBtn.dataset.galleryId, galleryBtn.dataset.galleryIndex);
       return;
     }
 
@@ -2198,6 +2488,30 @@ function attachEvents() {
       } catch (error) {
         alert(`Could not read image: ${error.message}`);
       }
+    });
+  }
+
+  if (els.galleryUploadDrop) {
+    let galleryDragDepth = 0;
+    els.galleryUploadDrop.addEventListener('dragenter', (event) => {
+      event.preventDefault();
+      galleryDragDepth += 1;
+      els.galleryUploadDrop.classList.add('drag-over');
+    });
+    els.galleryUploadDrop.addEventListener('dragover', (event) => {
+      event.preventDefault();
+    });
+    els.galleryUploadDrop.addEventListener('dragleave', (event) => {
+      event.preventDefault();
+      galleryDragDepth = Math.max(0, galleryDragDepth - 1);
+      if (galleryDragDepth === 0) els.galleryUploadDrop.classList.remove('drag-over');
+    });
+    els.galleryUploadDrop.addEventListener('drop', async (event) => {
+      event.preventDefault();
+      galleryDragDepth = 0;
+      els.galleryUploadDrop.classList.remove('drag-over');
+      const files = Array.from(event.dataTransfer?.files || []).filter((file) => file.type.startsWith('image/'));
+      if (files.length) await addGalleryPhotos(files);
     });
   }
 

@@ -45,6 +45,10 @@
         <input id="importFile" class="hidden" type="file" accept="application/json,.json">
       </div>
     </nav>
+    <nav id="sectionTabs" class="section-tabs" aria-label="Section">
+      <button id="cigarsTabBtn" type="button" class="section-tab active" data-section="cigars">Cigars</button>
+      <button id="galleryTabBtn" type="button" class="section-tab" data-section="gallery">Gallery</button>
+    </nav>
   </header>
 
   <section id="authPanel" class="auth-panel hidden" aria-live="polite">
@@ -111,6 +115,16 @@
     <div id="loadingState" class="empty loading-state">
       <span class="loading-spinner" aria-hidden="true"></span>
       Loading your cigars…
+    </div>
+  </main>
+
+  <main id="galleryShell" class="shell hidden">
+    <label id="galleryUploadDrop" class="upload-drop gallery-upload-drop">Upload photo(s)<input id="galleryUpload" type="file" accept="image/*" multiple></label>
+    <section id="galleryGrid" class="gallery-grid" aria-live="polite"></section>
+    <p id="galleryEmpty" class="empty hidden">No photos yet. Upload a photo of your humidor, lighter, cutter…</p>
+    <div id="galleryLoadingState" class="empty loading-state hidden">
+      <span class="loading-spinner" aria-hidden="true"></span>
+      Loading gallery…
     </div>
   </main>
 
