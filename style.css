@@ -538,6 +538,11 @@ textarea:focus {
   justify-content: space-between;
   gap: 0.75rem;
 }
+.card-footer {
+  margin-top: 0.5rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--line);
+}
 
 .status-pill,
 .history-badge {
@@ -1496,7 +1501,8 @@ body[data-access-level="read"] .cigar-row {
 }
 .gallery-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  grid-template-columns: repeat(auto-fill, 170px);
+  justify-content: center;
   gap: 0.85rem;
 }
 .gallery-tile {
@@ -1647,28 +1653,30 @@ body[data-access-level="read"] .cigar-row {
 
 .section-tabs {
   display: flex;
-  gap: 0.4rem;
+  gap: 1.4rem;
   max-width: 1180px;
   margin: 0 auto;
-  padding: 0 clamp(1rem, 4vw, 3rem) 0.55rem;
+  padding: 0 clamp(1rem, 4vw, 3rem);
 }
 .section-tab {
-  min-height: 30px;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  padding: 0.3rem 0.7rem;
+  min-height: 38px;
+  margin-bottom: -1px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: 0.5rem 0.05rem;
   background: transparent;
   color: var(--text-muted);
-  font-size: 0.82rem;
-  font-weight: 850;
+  font-size: 0.86rem;
+  font-weight: 700;
 }
 .section-tab:hover {
   color: var(--accent-dark);
 }
 .section-tab.active {
-  background: var(--accent-soft);
-  color: var(--accent-dark);
-  border-color: rgba(63, 111, 91, 0.18);
+  color: var(--text);
+  border-bottom-color: var(--accent-dark);
+  font-weight: 800;
 }
 
 .shell {

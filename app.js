@@ -1285,7 +1285,7 @@ function cardHtml(cigar) {
         </div>
         <h3>${escapeHtml(cigar.name)}</h3>
         <p class="meta-line">${escapeHtml([cigar.brand].filter(Boolean).join(' · '))}</p>
-        <div class="blend-chips blend-chips-card">${blendLine(cigar)}</div>
+
         <div class="card-footer">
           <span class="strength-tag">${strengthTagInner(cigar.strength, 'Strength not set')}</span>
           ${canEditCigar(cigar) ? `<button class="text-btn edit-btn" type="button" data-edit="${escapeHtml(cigar.id)}">Edit</button>` : '<span class="read-only-text">Read-only</span>'}
