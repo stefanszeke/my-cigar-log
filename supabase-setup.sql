@@ -72,6 +72,10 @@ create table if not exists public.cigar_photos (
 );
 
 alter table public.cigars add column if not exists image_url text;
+alter table public.cigars add column if not exists length_mm numeric;
+alter table public.cigars add column if not exists ring_gauge numeric;
+alter table public.cigars add column if not exists diameter_mm numeric;
+alter table public.cigars add column if not exists shape text;
 
 alter table public.cigars enable row level security;
 alter table public.cigar_access enable row level security;

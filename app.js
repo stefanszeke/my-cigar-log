@@ -99,11 +99,14 @@ const els = {
   galleryEmpty: document.getElementById('galleryEmpty'),
   galleryLoadingState: document.getElementById('galleryLoadingState'),
   galleryUpload: document.getElementById('galleryUpload'),
-  galleryUploadDrop: document.getElementById('galleryUploadDrop')
+  galleryUploadDrop: document.getElementById('galleryUploadDrop'),
+  vitolaInfoModal: document.getElementById('vitolaInfoModal'),
+  vitolaInfoClose: document.getElementById('vitolaInfoClose')
 };
 
 const formFields = [
   'cigarId', 'name', 'status', 'quantity', 'logOrder', 'brand', 'company', 'madeIn', 'vitola',
+  'lengthMm', 'ringGauge', 'diameterMm', 'shape',
   'strength', 'rating', 'boughtDate', 'smokedDate', 'price', 'wrapperLeaf', 'wrapperOrigin',
   'binderLeaf', 'binderOrigin', 'fillerLeaf', 'fillerOrigin', 'taste', 'draw', 'burn', 'nicotine',
   'pairing', 'link', 'notes', 'imageFile', 'imageCropX', 'imageCropY', 'imageZoom'
@@ -185,10 +188,41 @@ function strengthLabel(value) {
   return labels[key] ? `${key}/5 · ${labels[key]}` : '';
 }
 
-function strengthTagInner(value, fallback = '') {
-  const label = strengthLabel(value);
+function strengthNumbers(value) {
+  const labels = {
+    '1': 'Very mild',
+    '2': 'Mild to medium',
+    '3': 'Medium',
+    '4': 'Medium to full',
+    '5': 'Full'
+  };
+  const key = String(value || '');
+  return labels[key] ? `${key}/5` : '';
+}
+
+function strengthTagInner(value, fallback = '', numbersOnly = false) {
+  const label = numbersOnly ? strengthNumbers(value) : strengthLabel(value);
   const icon = '<svg class="icon" aria-hidden="true"><use href="#icon-flame"></use></svg>';
   return label ? `${icon}${escapeHtml(label)}` : escapeHtml(fallback);
+}
+
+function sizeBadgeHtml(cigar) {
+  const lengthMm = Number(cigar.lengthMm) || 0;
+  const ringGauge = Number(cigar.ringGauge) || Number(mmToRingGauge(cigar.diameterMm)) || 0;
+  const diameterMm = Number(cigar.diameterMm) || Number(ringGaugeToMm(cigar.ringGauge)) || 0;
+  const detected = !cigar.vitola ? detectVitolaCategory(lengthMm, ringGauge) : null;
+  const name = cigar.vitola || detected?.name || '';
+  if (!name && !lengthMm && !diameterMm) return '';
+
+  const lengthText = lengthMm ? `${Math.round(lengthMm)}mm` : '';
+  const diameterText = diameterMm ? `${diameterMm}mm` : '';
+  const detail = [lengthText && `${lengthText} length`, diameterText && `${diameterText} diameter`].filter(Boolean).join(' · ');
+  const title = [name, detail].filter(Boolean).join(' — ');
+
+  const rulerIcon = '<svg class="icon" aria-hidden="true"><use href="#icon-ruler"></use></svg>';
+  const diameterIcon = '<svg class="icon" aria-hidden="true"><use href="#icon-diameter"></use></svg>';
+
+  return `<span class="size-badge" title="${escapeHtml(title)}">${rulerIcon}${escapeHtml(name)}${lengthText ? ` ${escapeHtml(lengthText)}` : ''}${diameterText ? ` ${diameterIcon}${escapeHtml(diameterText)}` : ''}</span>`;
 }
 
 function stars(value) {
@@ -367,6 +401,10 @@ function normalizeCigar(cigar = {}, index = 0) {
     company: cigar.company || '',
     madeIn: cigar.madeIn || '',
     vitola: cigar.vitola || '',
+    lengthMm: cigar.lengthMm || '',
+    ringGauge: cigar.ringGauge || '',
+    diameterMm: cigar.diameterMm || '',
+    shape: cigar.shape || '',
     strength: cigar.strength || '',
     rating: cigar.rating || '',
     boughtDate: cigar.boughtDate || '',
@@ -534,6 +572,10 @@ function rowToCigar(row = {}) {
     company: row.company,
     madeIn: row.made_in,
     vitola: row.vitola,
+    lengthMm: row.length_mm ?? '',
+    ringGauge: row.ring_gauge ?? '',
+    diameterMm: row.diameter_mm ?? '',
+    shape: row.shape || '',
     strength: row.strength ?? '',
     rating: row.rating ?? '',
     boughtDate: row.bought_date || '',
@@ -575,6 +617,10 @@ function cigarToRow(cigar) {
     company: cigar.company || null,
     made_in: cigar.madeIn || null,
     vitola: cigar.vitola || null,
+    length_mm: cigar.lengthMm ? Number(cigar.lengthMm) : null,
+    ring_gauge: cigar.ringGauge ? Number(cigar.ringGauge) : null,
+    diameter_mm: cigar.diameterMm ? Number(cigar.diameterMm) : null,
+    shape: cigar.shape || null,
     strength: cigar.strength ? Number(cigar.strength) : null,
     rating: cigar.rating ? Number(cigar.rating) : null,
     bought_date: cigar.boughtDate || null,
@@ -1288,8 +1334,8 @@ function cardHtml(cigar) {
         <p class="meta-line">${escapeHtml([cigar.brand].filter(Boolean).join(' · '))}</p>
 
         <div class="card-footer">
-          <span class="strength-tag">${strengthTagInner(cigar.strength, 'Strength not set')}</span>
-          ${canEditCigar(cigar) ? `<button class="text-btn edit-btn" type="button" data-edit="${escapeHtml(cigar.id)}">Edit</button>` : '<span class="read-only-text">Read-only</span>'}
+          <span class="strength-tag">${strengthTagInner(cigar.strength, 'Strength not set', true)}</span>
+          ${sizeBadgeHtml(cigar)}
         </div>
       </div>
     </article>
@@ -1311,7 +1357,7 @@ function listHtml(cigar) {
 
         <div>${stars(cigar.rating)} ${statusPill(cigar.status)}</div>
         <div class="subtle strength-tag">${strengthTagInner(cigar.strength, 'No strength')}</div>
-        ${canEditCigar(cigar) ? `<button class="text-btn edit-btn" type="button" data-edit="${escapeHtml(cigar.id)}">Edit</button>` : '<span class="read-only-text">Read-only</span>'}
+        ${sizeBadgeHtml(cigar)}
       </div>
     </article>
   `;
@@ -1334,6 +1380,65 @@ function render() {
 function field(label, value) {
   if (!value) return '';
   return `<div class="detail-field"><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`;
+}
+
+function vitolaSizeCardHtml(cigar) {
+  const lengthMm = Number(cigar.lengthMm) || 0;
+  const ringGauge = Number(cigar.ringGauge) || 0;
+  const diameterMm = Number(cigar.diameterMm) || 0;
+  const shape = cigar.shape || '';
+  const detected = !cigar.vitola ? detectVitolaCategory(lengthMm, ringGauge) : null;
+  const name = cigar.vitola || detected?.name || '';
+  if (!name && !lengthMm && !ringGauge && !diameterMm) return '';
+
+  const shapeLabel = shape === 'figurado' ? 'Figurado' : shape === 'parejo' ? 'Parejo' : '';
+  const lengthCm = lengthMm ? (lengthMm / 10).toFixed(1) : '';
+  const lengthIn = lengthMm ? (lengthMm / 25.4).toFixed(1) : '';
+  const knownMatch = VITOLA_SIZES.find((size) => size.name === name);
+  const subtitle = detected?.approx ? 'Closest match' : knownMatch ? 'Common format' : '';
+
+  const stats = [
+    lengthMm ? `
+      <div class="size-stat">
+        <svg class="icon" aria-hidden="true"><use href="#icon-ruler"></use></svg>
+        <div><span>Length</span><strong>${lengthCm} cm</strong><small>${lengthMm} mm · ${lengthIn} in</small></div>
+      </div>` : '',
+    ringGauge ? `
+      <div class="size-stat">
+        <svg class="icon" aria-hidden="true"><use href="#icon-ring-gauge"></use></svg>
+        <div><span>Ring gauge</span><strong>${ringGauge}</strong></div>
+      </div>` : '',
+    diameterMm ? `
+      <div class="size-stat">
+        <svg class="icon" aria-hidden="true"><use href="#icon-diameter"></use></svg>
+        <div><span>Diameter</span><strong>${diameterMm} mm</strong></div>
+      </div>` : '',
+    shapeLabel ? `
+      <div class="size-stat">
+        <svg class="icon" aria-hidden="true"><use href="#icon-shape"></use></svg>
+        <div><span>Shape</span><strong>${shapeLabel}</strong></div>
+      </div>` : ''
+  ].filter(Boolean).join('');
+
+  if (!stats) return '';
+
+  return `
+    <div class="size-card">
+      <div class="size-card-top">
+        <div class="size-card-title">
+          <svg class="icon" aria-hidden="true"><use href="#icon-ruler"></use></svg>
+          <span>Vitola &amp; Size</span>
+        </div>
+        <button type="button" class="icon-btn info-icon-btn" data-vitola-info aria-label="Show size reference table" title="Size reference table">i</button>
+      </div>
+      ${name ? `
+      <div class="size-card-name">
+        <strong>${escapeHtml(name)}</strong>
+        ${subtitle ? `<span class="size-card-shape">${subtitle}</span>` : ''}
+      </div>` : ''}
+      <div class="size-card-grid">${stats}</div>
+    </div>
+  `;
 }
 
 function detailHtml(cigar) {
@@ -1368,7 +1473,6 @@ function detailHtml(cigar) {
         <dl class="detail-list">
           ${field('Smoking order', cigar.logOrder ? `#${cigar.logOrder}` : '')}
           ${field('Made in', cigar.madeIn)}
-          ${field('Vitola / size', cigar.vitola)}
           ${field('Strength', strengthLabel(cigar.strength))}
           ${field('Rating', cigar.rating ? `${cigar.rating} / 5` : '')}
           ${field('Quantity', cigar.status === 'owned' ? String(cigar.quantity || 1) : '')}
@@ -1380,6 +1484,8 @@ function detailHtml(cigar) {
           ${field('Nicotine feel', cigar.nicotine)}
           ${field('Pairing', cigar.pairing)}
         </dl>
+
+        ${vitolaSizeCardHtml(cigar)}
 
         <h3>Blend</h3>
         <div class="blend-table">
@@ -1665,6 +1771,13 @@ function prefillImportedCigar(imported = {}) {
   openForm('', cigar);
 }
 
+function syncVitolaPresetFromName(name) {
+  const presetField = document.getElementById('vitolaPreset');
+  if (!presetField) return;
+  const match = VITOLA_SIZES.find((size) => size.name === name);
+  presetField.value = match ? match.name : '';
+}
+
 function openForm(id = '', prefill = null) {
   const existingCigar = id ? cigars.find((item) => item.id === id) : null;
   if ((id && !canEditCigar(existingCigar)) || (!id && !canWrite())) {
@@ -1698,6 +1811,7 @@ function openForm(id = '', prefill = null) {
       field.value = cigar[fieldName] ?? '';
     }
     selectedImageData = cigar.imageData || '';
+    syncVitolaPresetFromName(cigar.vitola);
     formPhotos = sortPhotos(cigar.photos || []).map((photo, index) => ({
       ...photo,
       sortOrder: index,
@@ -1708,6 +1822,7 @@ function openForm(id = '', prefill = null) {
     fillFormFromCigar(prefill);
     document.getElementById('status').value = prefill.status || 'owned';
     document.getElementById('quantity').value = prefill.quantity || '1';
+    syncVitolaPresetFromName(prefill.vitola);
     formPhotos = sortPhotos(prefill.photos || []).map((photo, index) => ({ ...photo, sortOrder: index, src: photoSrc(photo) }));
   } else {
     els.formTitle.textContent = 'Add cigar';
@@ -1729,6 +1844,9 @@ function readForm() {
     const field = document.getElementById(fieldName);
     if (!field) continue;
     data[fieldName] = field.value.trim();
+  }
+  for (const key of ['lengthMm', 'ringGauge', 'diameterMm']) {
+    if (data[key]) data[key] = String(parseMmValue(data[key]));
   }
 
   const id = data.cigarId || newId(data.name);
@@ -2019,6 +2137,75 @@ function guessVitolaFromName(name = '') {
   return known.find((item) => upperName.includes(item.toUpperCase())) || '';
 }
 
+const MM_PER_RING_GAUGE = 0.397; // 1 ring gauge unit = 1/64 inch
+
+function ringGaugeToMm(ringGauge) {
+  const value = Number(ringGauge);
+  return value ? Math.round(value * MM_PER_RING_GAUGE * 10) / 10 : '';
+}
+
+function mmToRingGauge(diameterMm) {
+  const value = Number(diameterMm);
+  return value ? Math.round(value / MM_PER_RING_GAUGE) : '';
+}
+
+function parseMmValue(text = '') {
+  const match = String(text).replace(',', '.').match(/(\d+(?:\.\d+)?)/);
+  return match ? Number(match[1]) : '';
+}
+
+const VITOLA_SIZES = [
+  { name: 'Petit Panetela', shape: 'parejo', lengthMinMm: 102, lengthMaxMm: 127, ringMin: 34, ringMax: 38 },
+  { name: 'Petit Corona', shape: 'parejo', lengthMinMm: 108, lengthMaxMm: 120, ringMin: 40, ringMax: 42 },
+  { name: 'Corona', shape: 'parejo', lengthMinMm: 140, lengthMaxMm: 152, ringMin: 42, ringMax: 44 },
+  { name: 'Corona Gorda', shape: 'parejo', lengthMinMm: 143, lengthMaxMm: 152, ringMin: 46, ringMax: 50 },
+  { name: 'Robusto', shape: 'parejo', lengthMinMm: 121, lengthMaxMm: 140, ringMin: 48, ringMax: 52 },
+  { name: 'Petit Robusto', shape: 'parejo', lengthMinMm: 102, lengthMaxMm: 114, ringMin: 48, ringMax: 52 },
+  { name: 'Rothschild', shape: 'parejo', lengthMinMm: 108, lengthMaxMm: 120, ringMin: 48, ringMax: 50 },
+  { name: 'Toro', shape: 'parejo', lengthMinMm: 152, lengthMaxMm: 165, ringMin: 50, ringMax: 54 },
+  { name: 'Lonsdale', shape: 'parejo', lengthMinMm: 152, lengthMaxMm: 178, ringMin: 42, ringMax: 44 },
+  { name: 'Churchill', shape: 'parejo', lengthMinMm: 165, lengthMaxMm: 178, ringMin: 47, ringMax: 50 },
+  { name: 'Panetela', shape: 'parejo', lengthMinMm: 127, lengthMaxMm: 191, ringMin: 34, ringMax: 38 },
+  { name: 'Lancero', shape: 'parejo', lengthMinMm: 178, lengthMaxMm: 191, ringMin: 38, ringMax: 40 },
+  { name: 'Gordo', shape: 'parejo', lengthMinMm: 152, lengthMaxMm: 178, ringMin: 58, ringMax: 64 },
+  { name: 'Double Corona', shape: 'parejo', lengthMinMm: 191, lengthMaxMm: 216, ringMin: 49, ringMax: 52 },
+  { name: 'Presidente', shape: 'parejo', lengthMinMm: 191, lengthMaxMm: 216, ringMin: 49, ringMax: 54 },
+  { name: 'Belicoso', shape: 'figurado', lengthMinMm: 127, lengthMaxMm: 140, ringMin: 50, ringMax: 52 },
+  { name: 'Torpedo', shape: 'figurado', lengthMinMm: 140, lengthMaxMm: 178, ringMin: 52, ringMax: 54 },
+  { name: 'Perfecto', shape: 'figurado', lengthMinMm: 114, lengthMaxMm: 178, ringMin: 38, ringMax: 48 },
+  { name: 'Culebra', shape: 'figurado', lengthMinMm: 127, lengthMaxMm: 152, ringMin: 36, ringMax: 40 }
+];
+
+// Finds the vitola whose length/ring-gauge range contains both measurements; falls back to
+// the nearest range by relative distance (flagged approx: true) so odd/hand-rolled sizes still
+// get a reasonable label instead of nothing.
+function detectVitolaCategory(lengthMm, ringGauge) {
+  const length = Number(lengthMm) || 0;
+  const ring = Number(ringGauge) || 0;
+  if (!length && !ring) return null;
+
+  const exact = VITOLA_SIZES.find((size) =>
+    (!length || (length >= size.lengthMinMm && length <= size.lengthMaxMm)) &&
+    (!ring || (ring >= size.ringMin && ring <= size.ringMax))
+  );
+  if (exact) return { ...exact, approx: false };
+
+  let closest = null;
+  let closestScore = Infinity;
+  for (const size of VITOLA_SIZES) {
+    const lengthMid = (size.lengthMinMm + size.lengthMaxMm) / 2;
+    const ringMid = (size.ringMin + size.ringMax) / 2;
+    const lengthScore = length ? Math.abs(length - lengthMid) / lengthMid : 0;
+    const ringScore = ring ? Math.abs(ring - ringMid) / ringMid : 0;
+    const score = lengthScore + ringScore;
+    if (score < closestScore) {
+      closestScore = score;
+      closest = size;
+    }
+  }
+  return closest ? { ...closest, approx: true } : null;
+}
+
 const BRAND_COMPANY_MAP = {
   [normalizeLabel('C.L.E.')]: 'CLE Cigar Co.',
   [normalizeLabel('Cohiba')]: 'Habanos, S.A.',
@@ -2115,7 +2302,11 @@ function parseWebshopProduct(raw = '', sourceUrl = '') {
   const name = cleanImportedText(titleFromDoc || titleLine || urlName);
   const length = lineValueAfterColon(text, ['Dĺžka', 'Dlzka']) || lineValueAfterLabel(allLines, ['Dĺžka', 'Dlzka']);
   const diameter = lineValueAfterColon(text, ['Priemer']) || lineValueAfterLabel(allLines, ['Priemer']);
-  const vitolaName = guessVitolaFromName(name);
+  const lengthMm = parseMmValue(length);
+  const diameterMm = parseMmValue(diameter);
+  const ringGauge = mmToRingGauge(diameterMm);
+  const detectedSize = detectVitolaCategory(lengthMm, ringGauge);
+  const vitolaName = guessVitolaFromName(name) || detectedSize?.name || '';
   const dimensions = [length, diameter].filter(Boolean).join(' × ');
   const strengthText = lineValueAfterLabel(allLines, ['Sila cigary', 'Sila']);
   const strength = (strengthText.match(/[1-5]/) || [''])[0];
@@ -2132,6 +2323,10 @@ function parseWebshopProduct(raw = '', sourceUrl = '') {
     company,
     madeIn: lineValueAfterLabel(allLines, ['Krajina vyroby', 'Krajina výroby', 'Krajina povodu', 'Krajina pôvodu']),
     vitola: vitolaName || dimensions,
+    lengthMm,
+    ringGauge,
+    diameterMm,
+    shape: detectedSize?.shape || '',
     strength,
     price: cleanImportedText(doc?.querySelector('.price')?.innerText || '') || firstPriceFromText(text),
     wrapperLeaf: lineValueAfterColon(text, ['Krycí list', 'Kryci list']),
@@ -2188,7 +2383,9 @@ async function fetchWebshopProductText(productUrl) {
 function applyImportedCigarToOpenForm(imported = {}) {
   const cigar = normalizeCigar({ status: 'owned', quantity: 1, ...imported, id: document.getElementById('cigarId').value || '' });
   const fieldsToFill = [
-    'name', 'status', 'quantity', 'brand', 'company', 'madeIn', 'vitola', 'strength', 'price',
+    'name', 'status', 'quantity', 'brand', 'company', 'madeIn', 'vitola',
+    'lengthMm', 'ringGauge', 'diameterMm', 'shape',
+    'strength', 'price',
     'wrapperLeaf', 'wrapperOrigin', 'binderLeaf', 'binderOrigin', 'fillerLeaf', 'fillerOrigin',
     'taste', 'link', 'notes', 'imageCropX', 'imageCropY', 'imageZoom'
   ];
@@ -2431,6 +2628,12 @@ function attachEvents() {
     const editBtn = event.target.closest('[data-edit]');
     if (editBtn) openForm(editBtn.dataset.edit);
 
+    const vitolaInfoBtn = event.target.closest('[data-vitola-info]');
+    if (vitolaInfoBtn) {
+      els.vitolaInfoModal?.classList.remove('hidden');
+      return;
+    }
+
     const thumb = event.target.closest('.detail-thumb');
     if (thumb) {
       const mainFrame = els.detailBody.querySelector('.detail-main-img.photo-frame');
@@ -2539,11 +2742,65 @@ function attachEvents() {
   if (imageFileField) imageFileField.addEventListener('input', updateImageCropPreview);
   attachCropInteractions();
 
+  const vitolaPresetField = document.getElementById('vitolaPreset');
+  const lengthMmField = document.getElementById('lengthMm');
+  const ringGaugeField = document.getElementById('ringGauge');
+  const diameterMmField = document.getElementById('diameterMm');
+  const shapeField = document.getElementById('shape');
+  const vitolaField = document.getElementById('vitola');
+  const detectVitolaBtn = document.getElementById('detectVitolaBtn');
+  const vitolaDetectHint = document.getElementById('vitolaDetectHint');
+
+  ringGaugeField?.addEventListener('input', () => {
+    const ring = parseMmValue(ringGaugeField.value);
+    if (ring && diameterMmField) diameterMmField.value = ringGaugeToMm(ring);
+  });
+  diameterMmField?.addEventListener('input', () => {
+    const diameter = parseMmValue(diameterMmField.value);
+    if (diameter && ringGaugeField) ringGaugeField.value = mmToRingGauge(diameter);
+  });
+
+  vitolaPresetField?.addEventListener('change', () => {
+    const preset = VITOLA_SIZES.find((size) => size.name === vitolaPresetField.value);
+    if (!preset) return;
+    if (vitolaField) vitolaField.value = preset.name;
+    if (lengthMmField) lengthMmField.value = Math.round((preset.lengthMinMm + preset.lengthMaxMm) / 2);
+    if (ringGaugeField) ringGaugeField.value = Math.round((preset.ringMin + preset.ringMax) / 2);
+    if (diameterMmField) diameterMmField.value = ringGaugeToMm(ringGaugeField?.value);
+    if (shapeField) shapeField.value = preset.shape;
+    if (vitolaDetectHint) vitolaDetectHint.textContent = '';
+  });
+
+  detectVitolaBtn?.addEventListener('click', () => {
+    const length = parseMmValue(lengthMmField?.value);
+    let ring = parseMmValue(ringGaugeField?.value);
+    if (!ring) ring = mmToRingGauge(parseMmValue(diameterMmField?.value));
+    const match = detectVitolaCategory(length, ring);
+    if (!match) {
+      if (vitolaDetectHint) vitolaDetectHint.textContent = 'Enter a length and/or ring gauge (or diameter) first.';
+      return;
+    }
+    if (vitolaField) vitolaField.value = match.name;
+    if (shapeField) shapeField.value = match.shape;
+    syncVitolaPresetFromName(match.name);
+    if (vitolaDetectHint) {
+      vitolaDetectHint.textContent = match.approx ? `Closest match: ${match.name}` : `Detected: ${match.name}`;
+    }
+  });
+
+  const vitolaInfoBtn = document.getElementById('vitolaInfoBtn');
+  vitolaInfoBtn?.addEventListener('click', () => {
+    els.vitolaInfoModal?.classList.remove('hidden');
+  });
+  els.vitolaInfoClose?.addEventListener('click', () => {
+    els.vitolaInfoModal?.classList.add('hidden');
+  });
+
   els.resetCropBtn.addEventListener('click', () => {
     setCropValues({ x: 50, y: 50, zoom: 1 });
   });
 
-  [els.detailModal, els.formModal, els.galleryModal, els.webshopModal].forEach((modal) => {
+  [els.detailModal, els.formModal, els.galleryModal, els.webshopModal, els.vitolaInfoModal].forEach((modal) => {
     modal.addEventListener('click', (event) => {
       if (event.target === modal) modal.classList.add('hidden');
     });
@@ -2556,6 +2813,7 @@ function attachEvents() {
       closeForm();
       closeWebshopModal();
       closeMoreMenu();
+      els.vitolaInfoModal?.classList.add('hidden');
     }
     if (!els.galleryModal.classList.contains('hidden')) {
       if (event.key === 'ArrowLeft') moveGallery(-1);
