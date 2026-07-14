@@ -764,7 +764,6 @@ async function loadRemoteData() {
   cigars = (data || []).map(rowToCigar);
   await loadRemotePhotos();
   await hydrateImages();
-  saveData();
   setSyncStatus(currentUser.email, 'cloud');
   setAccessUi();
   appLoading = false;
