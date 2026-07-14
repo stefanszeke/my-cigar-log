@@ -907,30 +907,6 @@ textarea:focus {
   margin: 1rem 0 0.52rem;
   letter-spacing: -0.02em;
 }
-.blend-table {
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
-}
-.blend-table div {
-  display: flex;
-  align-items: baseline;
-  gap: 0.4rem;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  background: var(--surface-soft);
-}
-.blend-table b {
-  min-width: 74px;
-  flex-shrink: 0;
-  white-space: nowrap;
-  color: var(--accent-dark);
-}
-.blend-table span {
-  color: var(--text-muted);
-}
-
 .size-card {
   display: flex;
   flex-direction: column;
@@ -1017,6 +993,39 @@ textarea:focus {
   color: var(--text);
 }
 .size-stat small {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.68rem;
+}
+
+.blend-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+.blend-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.2rem;
+}
+.blend-row .icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  margin-top: 0.5rem;
+}
+.blend-row span {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+.blend-row strong {
+  display: block;
+  font-size: 0.95rem;
+  color: var(--text);
+}
+.blend-row small {
   display: block;
   color: var(--text-muted);
   font-size: 0.68rem;
@@ -2056,7 +2065,6 @@ textarea:focus {
 }
 
 .blend-chips span,
-.blend-table div,
 .detail-list,
 .size-card,
 fieldset,

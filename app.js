@@ -1442,6 +1442,85 @@ function vitolaSizeCardHtml(cigar) {
   `;
 }
 
+function blendCardHtml(cigar) {
+  const rows = [
+    { label: 'Wrapper', leaf: cigar.wrapperLeaf, origin: cigar.wrapperOrigin, color: '#baa26e' },
+    { label: 'Binder', leaf: cigar.binderLeaf, origin: cigar.binderOrigin, color: '#8a9a5b' },
+    { label: 'Filler', leaf: cigar.fillerLeaf, origin: cigar.fillerOrigin, color: '#b5651d' }
+  ];
+
+  const stats = rows
+    .filter((row) => row.leaf || row.origin)
+    .map((row) => `
+      <div class="blend-row">
+        <svg class="icon" aria-hidden="true" style="color:${row.color}"><use href="#icon-leaf"></use></svg>
+        <div><span>${escapeHtml(row.label)}</span><strong>${escapeHtml(row.leaf || '—')}</strong>${row.origin ? `<small>${escapeHtml(row.origin)}</small>` : ''}</div>
+      </div>`)
+    .join('');
+
+  if (!stats) return '';
+
+  return `
+    <div class="size-card">
+      <div class="blend-rows">${stats}</div>
+    </div>
+  `;
+}
+
+function detailsCardHtml(cigar) {
+  const stats = [
+    cigar.strength ? `
+      <div class="size-stat">
+        <svg class="icon" aria-hidden="true"><use href="#icon-flame"></use></svg>
+        <div><span>Strength</span><strong>${escapeHtml(strengthLabel(cigar.strength))}</strong></div>
+      </div>` : '',
+    cigar.rating ? `
+      <div class="size-stat">
+        <svg class="icon" aria-hidden="true"><use href="#icon-star"></use></svg>
+        <div><span>Rating</span><strong>${escapeHtml(`${cigar.rating} / 5`)}</strong></div>
+      </div>` : '',
+    cigar.status === 'owned' && cigar.quantity ? `
+      <div class="size-stat">
+        <svg class="icon" aria-hidden="true"><use href="#icon-box"></use></svg>
+        <div><span>Quantity</span><strong>${escapeHtml(String(cigar.quantity))}</strong></div>
+      </div>` : '',
+    cigar.logOrder ? `
+      <div class="size-stat">
+        <svg class="icon" aria-hidden="true"><use href="#icon-hash"></use></svg>
+        <div><span>Smoking order</span><strong>${escapeHtml(`#${cigar.logOrder}`)}</strong></div>
+      </div>` : '',
+    cigar.boughtDate ? `
+      <div class="size-stat">
+        <svg class="icon" aria-hidden="true"><use href="#icon-calendar"></use></svg>
+        <div><span>Bought</span><strong>${escapeHtml(displayDate(cigar.boughtDate))}</strong></div>
+      </div>` : '',
+    cigar.smokedDate ? `
+      <div class="size-stat">
+        <svg class="icon" aria-hidden="true"><use href="#icon-calendar"></use></svg>
+        <div><span>Smoked</span><strong>${escapeHtml(displayDate(cigar.smokedDate))}</strong></div>
+      </div>` : '',
+    cigar.price ? `
+      <div class="size-stat">
+        <svg class="icon" aria-hidden="true"><use href="#icon-tag"></use></svg>
+        <div><span>Price</span><strong>${escapeHtml(cigar.price)}</strong></div>
+      </div>` : ''
+  ].filter(Boolean).join('');
+
+  if (!stats) return '';
+
+  return `
+    <div class="size-card">
+      <div class="size-card-top">
+        <div class="size-card-title">
+          <svg class="icon" aria-hidden="true"><use href="#icon-list"></use></svg>
+          <span>Details</span>
+        </div>
+      </div>
+      <div class="size-card-grid">${stats}</div>
+    </div>
+  `;
+}
+
 function detailHtml(cigar) {
   const images = cigar.images?.length ? cigar.images : [];
   const mainImage = images[0]
@@ -1472,28 +1551,16 @@ function detailHtml(cigar) {
         </div>
 
         <dl class="detail-list">
-          ${field('Smoking order', cigar.logOrder ? `#${cigar.logOrder}` : '')}
           ${field('Made in', cigar.madeIn)}
-          ${field('Strength', strengthLabel(cigar.strength))}
-          ${field('Rating', cigar.rating ? `${cigar.rating} / 5` : '')}
-          ${field('Quantity', cigar.status === 'owned' ? String(cigar.quantity || 1) : '')}
-          ${field('Bought', displayDate(cigar.boughtDate))}
-          ${field('Smoked', displayDate(cigar.smokedDate))}
-          ${field('Price', cigar.price)}
           ${field('Draw', cigar.draw)}
           ${field('Burn', cigar.burn)}
           ${field('Nicotine feel', cigar.nicotine)}
           ${field('Pairing', cigar.pairing)}
         </dl>
 
+        ${detailsCardHtml(cigar)}
         ${vitolaSizeCardHtml(cigar)}
-
-        <h3>Blend</h3>
-        <div class="blend-table">
-          <div><b>Wrapper</b><span>${escapeHtml([cigar.wrapperLeaf, cigar.wrapperOrigin].filter(Boolean).join(' · ') || '—')}</span></div>
-          <div><b>Binder</b><span>${escapeHtml([cigar.binderLeaf, cigar.binderOrigin].filter(Boolean).join(' · ') || '—')}</span></div>
-          <div><b>Filler</b><span>${escapeHtml([cigar.fillerLeaf, cigar.fillerOrigin].filter(Boolean).join(' · ') || '—')}</span></div>
-        </div>
+        ${blendCardHtml(cigar)}
 
         ${cigar.taste ? `<h3>Taste</h3><p>${escapeHtml(cigar.taste)}</p>` : ''}
         ${cigar.notes ? `<h3>Personal notes</h3><p class="note-text">${escapeHtml(cigar.notes)}</p>` : ''}
