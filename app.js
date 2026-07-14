@@ -734,6 +734,8 @@ async function uploadCigarImage(cigar, fileOrBlob) {
 
 async function loadRemoteData() {
   if (!supabaseClient || !currentUser) return;
+  appLoading = true;
+  render();
   if (!currentAccess.ownerId && currentAccess.accessLevel !== 'owner') await loadAccess();
 
   if (currentAccess.accessLevel === 'none') {
