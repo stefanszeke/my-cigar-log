@@ -1226,6 +1226,11 @@ function createdDateValue(value) {
   return Number.isNaN(date.getTime()) ? 0 : date.getTime();
 }
 
+function nextSmokingOrder() {
+  const highest = cigars.reduce((max, cigar) => Math.max(max, Number(cigar.logOrder) || 0), 0);
+  return highest + 1;
+}
+
 function compareCigars(sort, a, b) {
   if (sort === 'history') {
     const orderA = a.logOrder ? Number(a.logOrder) : Number.POSITIVE_INFINITY;
@@ -1943,6 +1948,13 @@ async function upsertCigar(event) {
   }
   const cigar = readForm();
   const existingIndex = cigars.findIndex((item) => item.id === cigar.id);
+
+  if (cigar.logOrder) {
+    const isDuplicate = cigars.some((item, index) => index !== existingIndex && String(item.logOrder) === String(cigar.logOrder));
+    if (isDuplicate && !confirm(`Smoking order #${cigar.logOrder} is already used by another cigar. Save anyway?`)) {
+      return;
+    }
+  }
 
   try {
     if (supabaseClient && currentUser) {
@@ -2809,6 +2821,14 @@ function attachEvents() {
   const imageFileField = document.getElementById('imageFile');
   if (imageFileField) imageFileField.addEventListener('input', updateImageCropPreview);
   attachCropInteractions();
+
+  const statusField = document.getElementById('status');
+  const logOrderField = document.getElementById('logOrder');
+  statusField?.addEventListener('change', () => {
+    if (statusField.value === 'smoked' && logOrderField && !logOrderField.value.trim()) {
+      logOrderField.value = nextSmokingOrder();
+    }
+  });
 
   const vitolaPresetField = document.getElementById('vitolaPreset');
   const lengthMmField = document.getElementById('lengthMm');
