@@ -1084,6 +1084,7 @@ textarea:focus {
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  touch-action: pan-y;
 }
 .gallery-body img {
   display: block;

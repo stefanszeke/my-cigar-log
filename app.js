@@ -2729,6 +2729,21 @@ function attachEvents() {
   els.galleryClose.addEventListener('click', closeGallery);
   els.galleryPrev.addEventListener('click', () => moveGallery(-1));
   els.galleryNext.addEventListener('click', () => moveGallery(1));
+
+  let gallerySwipeStartX = 0;
+  let gallerySwipeStartY = 0;
+  els.galleryBody.addEventListener('touchstart', (event) => {
+    if (event.touches.length !== 1) return;
+    gallerySwipeStartX = event.touches[0].clientX;
+    gallerySwipeStartY = event.touches[0].clientY;
+  }, { passive: true });
+  els.galleryBody.addEventListener('touchend', (event) => {
+    const touch = event.changedTouches[0];
+    const deltaX = touch.clientX - gallerySwipeStartX;
+    const deltaY = touch.clientY - gallerySwipeStartY;
+    if (Math.abs(deltaX) < 40 || Math.abs(deltaX) < Math.abs(deltaY) * 1.5) return;
+    moveGallery(deltaX < 0 ? 1 : -1);
+  }, { passive: true });
   els.formClose.addEventListener('click', closeForm);
   els.cancelFormBtn.addEventListener('click', closeForm);
   els.cigarForm.addEventListener('submit', upsertCigar);
