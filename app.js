@@ -119,6 +119,17 @@ let galleryImages = [];
 let galleryIndex = 0;
 let galleryTitle = '';
 let galleryCaptions = [];
+let galleryZoom = 1;
+let galleryPanX = 0;
+let galleryPanY = 0;
+const galleryPointers = new Map();
+let galleryPinchStart = null;
+let galleryDrag = null;
+let galleryLastTapTime = 0;
+let galleryLastTapPos = null;
+const GALLERY_ZOOM_MIN = 1;
+const GALLERY_ZOOM_MAX = 4;
+const GALLERY_DOUBLE_TAP_ZOOM = 2.5;
 
 function escapeHtml(value = '') {
   return String(value)
@@ -2088,16 +2099,79 @@ function renderGallery() {
   const multiple = galleryImages.length > 1;
   els.galleryPrev.classList.toggle('hidden', !multiple);
   els.galleryNext.classList.toggle('hidden', !multiple);
+  resetGalleryZoom();
 }
 
 function closeGallery() {
   els.galleryModal.classList.add('hidden');
+  resetGalleryZoom();
 }
 
 function moveGallery(delta) {
   if (!galleryImages.length) return;
   galleryIndex = (galleryIndex + delta + galleryImages.length) % galleryImages.length;
   renderGallery();
+}
+
+function galleryImageEl() {
+  return els.galleryBody?.querySelector('img') || null;
+}
+
+function applyGalleryTransform(withTransition = false) {
+  const img = galleryImageEl();
+  if (!img) return;
+  img.style.transition = withTransition ? 'transform 0.2s ease' : 'none';
+  img.style.transform = `translate(${galleryPanX}px, ${galleryPanY}px) scale(${galleryZoom})`;
+}
+
+function resetGalleryZoom() {
+  galleryZoom = 1;
+  galleryPanX = 0;
+  galleryPanY = 0;
+  galleryPointers.clear();
+  galleryPinchStart = null;
+  galleryDrag = null;
+}
+
+function galleryPanBound() {
+  const rect = els.galleryBody.getBoundingClientRect();
+  return {
+    x: (rect.width * (galleryZoom - 1)) / 2,
+    y: (rect.height * (galleryZoom - 1)) / 2
+  };
+}
+
+function setGalleryZoom(nextZoom) {
+  galleryZoom = Math.min(GALLERY_ZOOM_MAX, Math.max(GALLERY_ZOOM_MIN, nextZoom));
+  if (galleryZoom === 1) {
+    galleryPanX = 0;
+    galleryPanY = 0;
+  } else {
+    const bound = galleryPanBound();
+    galleryPanX = Math.min(bound.x, Math.max(-bound.x, galleryPanX));
+    galleryPanY = Math.min(bound.y, Math.max(-bound.y, galleryPanY));
+  }
+}
+
+function handleGalleryTap(event) {
+  const now = Date.now();
+  const isDoubleTap = galleryLastTapPos
+    && now - galleryLastTapTime < 320
+    && Math.hypot(event.clientX - galleryLastTapPos.x, event.clientY - galleryLastTapPos.y) < 30;
+
+  if (isDoubleTap) {
+    galleryLastTapTime = 0;
+    galleryLastTapPos = null;
+    if (galleryZoom > 1) {
+      setGalleryZoom(1);
+    } else {
+      setGalleryZoom(GALLERY_DOUBLE_TAP_ZOOM);
+    }
+    applyGalleryTransform(true);
+  } else {
+    galleryLastTapTime = now;
+    galleryLastTapPos = { x: event.clientX, y: event.clientY };
+  }
 }
 
 
@@ -2730,20 +2804,84 @@ function attachEvents() {
   els.galleryPrev.addEventListener('click', () => moveGallery(-1));
   els.galleryNext.addEventListener('click', () => moveGallery(1));
 
-  let gallerySwipeStartX = 0;
-  let gallerySwipeStartY = 0;
-  els.galleryBody.addEventListener('touchstart', (event) => {
-    if (event.touches.length !== 1) return;
-    gallerySwipeStartX = event.touches[0].clientX;
-    gallerySwipeStartY = event.touches[0].clientY;
-  }, { passive: true });
-  els.galleryBody.addEventListener('touchend', (event) => {
-    const touch = event.changedTouches[0];
-    const deltaX = touch.clientX - gallerySwipeStartX;
-    const deltaY = touch.clientY - gallerySwipeStartY;
-    if (Math.abs(deltaX) < 40 || Math.abs(deltaX) < Math.abs(deltaY) * 1.5) return;
-    moveGallery(deltaX < 0 ? 1 : -1);
-  }, { passive: true });
+  els.galleryBody.addEventListener('pointerdown', (event) => {
+    if (!galleryImages.length) return;
+    galleryPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    els.galleryBody.setPointerCapture(event.pointerId);
+
+    if (galleryPointers.size === 2) {
+      const pts = Array.from(galleryPointers.values());
+      galleryPinchStart = {
+        dist: Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y),
+        zoom: galleryZoom
+      };
+      galleryDrag = null;
+    } else if (galleryPointers.size === 1) {
+      galleryDrag = {
+        pointerId: event.pointerId,
+        startClientX: event.clientX,
+        startClientY: event.clientY,
+        startPanX: galleryPanX,
+        startPanY: galleryPanY,
+        moved: false
+      };
+    }
+  });
+
+  els.galleryBody.addEventListener('pointermove', (event) => {
+    if (!galleryPointers.has(event.pointerId)) return;
+    galleryPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+    if (galleryPointers.size === 2 && galleryPinchStart) {
+      const pts = Array.from(galleryPointers.values());
+      const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      if (galleryPinchStart.dist > 0) {
+        setGalleryZoom(galleryPinchStart.zoom * (dist / galleryPinchStart.dist));
+        applyGalleryTransform();
+      }
+      return;
+    }
+
+    if (galleryDrag && event.pointerId === galleryDrag.pointerId) {
+      const deltaX = event.clientX - galleryDrag.startClientX;
+      const deltaY = event.clientY - galleryDrag.startClientY;
+      if (Math.abs(deltaX) > 6 || Math.abs(deltaY) > 6) galleryDrag.moved = true;
+
+      if (galleryZoom > 1) {
+        const bound = galleryPanBound();
+        galleryPanX = Math.min(bound.x, Math.max(-bound.x, galleryDrag.startPanX + deltaX));
+        galleryPanY = Math.min(bound.y, Math.max(-bound.y, galleryDrag.startPanY + deltaY));
+        applyGalleryTransform();
+      }
+    }
+  });
+
+  const endGalleryPointer = (event) => {
+    const wasDrag = galleryDrag && event.pointerId === galleryDrag.pointerId ? galleryDrag : null;
+    galleryPointers.delete(event.pointerId);
+    if (galleryPointers.size < 2) galleryPinchStart = null;
+    if (!wasDrag) return;
+    galleryDrag = null;
+
+    if (!wasDrag.moved) {
+      handleGalleryTap(event);
+    } else if (galleryZoom <= 1) {
+      const deltaX = event.clientX - wasDrag.startClientX;
+      const deltaY = event.clientY - wasDrag.startClientY;
+      if (Math.abs(deltaX) >= 40 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
+        moveGallery(deltaX < 0 ? 1 : -1);
+      }
+    }
+  };
+  els.galleryBody.addEventListener('pointerup', endGalleryPointer);
+  els.galleryBody.addEventListener('pointercancel', endGalleryPointer);
+
+  els.galleryBody.addEventListener('wheel', (event) => {
+    if (!galleryImages.length) return;
+    event.preventDefault();
+    setGalleryZoom(galleryZoom * (1 - Math.sign(event.deltaY) * 0.08));
+    applyGalleryTransform();
+  }, { passive: false });
   els.formClose.addEventListener('click', closeForm);
   els.cancelFormBtn.addEventListener('click', closeForm);
   els.cigarForm.addEventListener('submit', upsertCigar);

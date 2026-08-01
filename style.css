@@ -1073,9 +1073,9 @@ textarea:focus {
 }
 .gallery-card {
   position: relative;
-  width: min(100%, 1120px);
-  height: min(88vh, 760px);
-  height: min(88dvh, 760px);
+  width: min(100%, 1600px);
+  height: min(88vh, 980px);
+  height: min(88dvh, 980px);
 }
 .gallery-body {
   position: absolute;
@@ -1084,7 +1084,7 @@ textarea:focus {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  touch-action: pan-y;
+  touch-action: none;
 }
 .gallery-body img {
   display: block;
@@ -1096,6 +1096,9 @@ textarea:focus {
   border-radius: 10px;
   box-shadow: 0 26px 80px rgba(0, 0, 0, 0.34);
   background: white;
+  transform-origin: center center;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 .gallery-nav {
   position: absolute;
