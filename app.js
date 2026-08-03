@@ -1563,6 +1563,7 @@ function detailHtml(cigar) {
 
         <div class="detail-actions">
           ${canEditCigar(cigar) ? `<button class="primary-btn edit-btn" type="button" data-edit="${escapeHtml(cigar.id)}">Edit cigar</button>` : '<span class="readonly-banner">Read-only view</span>'}
+          ${canWrite() ? `<button class="ghost-btn duplicate-btn" type="button" data-duplicate="${escapeHtml(cigar.id)}">Duplicate</button>` : ''}
           ${cigar.link ? `<a class="ghost-link" href="${escapeHtml(cigar.link)}" target="_blank" rel="noopener">Product page ↗</a>` : ''}
         </div>
 
@@ -1839,6 +1840,41 @@ function fillFormFromCigar(cigar = {}) {
     field.value = cigar[fieldName] ?? '';
   }
   selectedImageData = cigar.imageData || '';
+}
+
+async function duplicateCigar(id) {
+  const source = cigars.find((item) => item.id === id);
+  if (!source) return;
+  if (!canWrite()) {
+    alert('This account has read-only access.');
+    return;
+  }
+
+  const prefill = normalizeCigar({
+    ...source,
+    id: '',
+    status: 'owned',
+    quantity: 1,
+    logOrder: '',
+    rating: '',
+    boughtDate: '',
+    smokedDate: '',
+    photos: []
+  });
+
+  closeDetail();
+  openForm('', prefill);
+
+  const profilePhoto = sortPhotos(source.photos || []).find((photo) => photo.isProfile) || sortPhotos(source.photos || [])[0];
+  if (!profilePhoto) return;
+
+  try {
+    const response = await fetch(photoSrc(profilePhoto));
+    const blob = await response.blob();
+    await addFilesToFormPhotos([blob]);
+  } catch (error) {
+    console.warn('Could not copy profile photo for duplicate', error);
+  }
 }
 
 function prefillImportedCigar(imported = {}) {
@@ -2781,6 +2817,12 @@ function attachEvents() {
 
     const editBtn = event.target.closest('[data-edit]');
     if (editBtn) openForm(editBtn.dataset.edit);
+
+    const duplicateBtn = event.target.closest('[data-duplicate]');
+    if (duplicateBtn) {
+      duplicateCigar(duplicateBtn.dataset.duplicate);
+      return;
+    }
 
     const vitolaInfoBtn = event.target.closest('[data-vitola-info]');
     if (vitolaInfoBtn) {
