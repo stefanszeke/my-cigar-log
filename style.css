@@ -735,6 +735,11 @@ textarea:focus {
   gap: 0.25rem;
   min-width: 118px;
 }
+.row-size-line {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
 .empty {
   text-align: center;
   padding: 2rem;

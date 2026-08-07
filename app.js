@@ -1257,6 +1257,7 @@ function compareCigars(sort, a, b) {
   if (sort === 'name') return a.name.localeCompare(b.name);
   if (sort === 'rating') return Number(a.rating || 0) - Number(b.rating || 0);
   if (sort === 'strength') return Number(a.strength || 0) - Number(b.strength || 0);
+  if (sort === 'price') return Number(parsePriceValue(a.price) || 0) - Number(parsePriceValue(b.price) || 0);
   return createdDateValue(a.createdAt) - createdDateValue(b.createdAt);
 }
 
@@ -1374,7 +1375,7 @@ function listHtml(cigar) {
 
         <div>${stars(cigar.rating)} ${statusPill(cigar.status)}</div>
         <div class="subtle strength-tag">${strengthTagInner(cigar.strength, 'No strength')}</div>
-        ${sizeBadgeHtml(cigar)}
+        <div class="row-size-line">${cigar.price ? `<span class="size-badge"><svg class="icon" aria-hidden="true"><use href="#icon-tag"></use></svg>${escapeHtml(cigar.price)}</span>` : ''}${sizeBadgeHtml(cigar)}</div>
       </div>
     </article>
   `;
@@ -2337,6 +2338,11 @@ function ringGaugeToMm(ringGauge) {
 function mmToRingGauge(diameterMm) {
   const value = Number(diameterMm);
   return value ? Math.round(value / MM_PER_RING_GAUGE) : '';
+}
+
+function parsePriceValue(text = '') {
+  const match = String(text).replace(',', '.').match(/(\d+(?:\.\d+)?)/);
+  return match ? Number(match[1]) : '';
 }
 
 function parseMmValue(text = '') {
