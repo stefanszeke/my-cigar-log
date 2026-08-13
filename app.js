@@ -43,6 +43,7 @@ const els = {
   listViewBtn: document.getElementById('listViewBtn'),
   smokedFilterBtn: document.getElementById('smokedFilterBtn'),
   humidorFilterBtn: document.getElementById('humidorFilterBtn'),
+  allFilterBtn: document.getElementById('allFilterBtn'),
   addBtn: document.getElementById('addBtn'),
   exportBtn: document.getElementById('exportBtn'),
   importBtn: document.getElementById('importBtn'),
@@ -1394,6 +1395,7 @@ function render() {
   els.listViewBtn.classList.toggle('active', viewMode === 'list');
   els.smokedFilterBtn?.classList.toggle('active', els.statusFilter.value === 'smoked');
   els.humidorFilterBtn?.classList.toggle('active', els.statusFilter.value === 'owned');
+  els.allFilterBtn?.classList.toggle('active', els.statusFilter.value === 'all');
   els.loadingState?.classList.toggle('hidden', !appLoading);
   els.empty.classList.toggle('hidden', appLoading || list.length > 0);
 
@@ -2766,6 +2768,11 @@ function attachEvents() {
 
   els.humidorFilterBtn?.addEventListener('click', () => {
     els.statusFilter.value = 'owned';
+    render();
+  });
+
+  els.allFilterBtn?.addEventListener('click', () => {
+    els.statusFilter.value = 'all';
     render();
   });
 
