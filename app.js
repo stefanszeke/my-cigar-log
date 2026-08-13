@@ -41,6 +41,8 @@ const els = {
   toolbarToggleBtn: document.getElementById('toolbarToggleBtn'),
   cardViewBtn: document.getElementById('cardViewBtn'),
   listViewBtn: document.getElementById('listViewBtn'),
+  smokedFilterBtn: document.getElementById('smokedFilterBtn'),
+  humidorFilterBtn: document.getElementById('humidorFilterBtn'),
   addBtn: document.getElementById('addBtn'),
   exportBtn: document.getElementById('exportBtn'),
   importBtn: document.getElementById('importBtn'),
@@ -1244,9 +1246,10 @@ function nextSmokingOrder() {
 
 function compareCigars(sort, a, b) {
   if (sort === 'history') {
-    const orderA = a.logOrder ? Number(a.logOrder) : Number.POSITIVE_INFINITY;
-    const orderB = b.logOrder ? Number(b.logOrder) : Number.POSITIVE_INFINITY;
-    if (orderA !== orderB) return orderA - orderB;
+    const hasOrderA = Boolean(a.logOrder);
+    const hasOrderB = Boolean(b.logOrder);
+    if (hasOrderA !== hasOrderB) return hasOrderA ? -1 : 1;
+    if (hasOrderA && hasOrderB) return Number(b.logOrder) - Number(a.logOrder);
 
     const smokedA = orderDateValue(a.smokedDate);
     const smokedB = orderDateValue(b.smokedDate);
@@ -1389,6 +1392,8 @@ function render() {
   els.results.className = `results ${viewMode === 'cards' ? 'cards-view' : 'list-view'}`;
   els.cardViewBtn.classList.toggle('active', viewMode === 'cards');
   els.listViewBtn.classList.toggle('active', viewMode === 'list');
+  els.smokedFilterBtn?.classList.toggle('active', els.statusFilter.value === 'smoked');
+  els.humidorFilterBtn?.classList.toggle('active', els.statusFilter.value === 'owned');
   els.loadingState?.classList.toggle('hidden', !appLoading);
   els.empty.classList.toggle('hidden', appLoading || list.length > 0);
 
@@ -2751,6 +2756,16 @@ function attachEvents() {
   els.listViewBtn.addEventListener('click', () => {
     viewMode = 'list';
     localStorage.setItem(VIEW_KEY, viewMode);
+    render();
+  });
+
+  els.smokedFilterBtn?.addEventListener('click', () => {
+    els.statusFilter.value = 'smoked';
+    render();
+  });
+
+  els.humidorFilterBtn?.addEventListener('click', () => {
+    els.statusFilter.value = 'owned';
     render();
   });
 
