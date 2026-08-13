@@ -236,6 +236,13 @@ button {
   align-items: center;
   gap: 0.5rem;
 }
+.toolbar-divider {
+  width: 13px;
+  height: 13px;
+  color: var(--accent, #baa26e);
+  opacity: 0.55;
+  flex-shrink: 0;
+}
 .toolbar-toggle-btn {
   min-height: 26px;
   min-width: 26px;
