@@ -243,6 +243,10 @@ button {
   opacity: 0.55;
   flex-shrink: 0;
 }
+.icon.toolbar-divider {
+  fill: currentColor;
+  stroke: none;
+}
 .toolbar-toggle-btn {
   min-height: 26px;
   min-width: 26px;
