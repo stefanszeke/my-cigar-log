@@ -60,6 +60,8 @@ const els = {
   webshopUrlInput: document.getElementById('webshopUrlInput'),
   fetchWebshopBtn: document.getElementById('fetchWebshopBtn'),
   webshopImportMessage: document.getElementById('webshopImportMessage'),
+  webshopPasteInput: document.getElementById('webshopPasteInput'),
+  fillFromPasteBtn: document.getElementById('fillFromPasteBtn'),
   detailModal: document.getElementById('detailModal'),
   detailClose: document.getElementById('detailClose'),
   detailBody: document.getElementById('detailBody'),
@@ -88,6 +90,10 @@ const els = {
   syncStatus: document.getElementById('syncStatus'),
   accessBadge: document.getElementById('accessBadge'),
   signOutBtn: document.getElementById('signOutBtn'),
+  storageUsageBtn: document.getElementById('storageUsageBtn'),
+  storageUsageModal: document.getElementById('storageUsageModal'),
+  storageUsageClose: document.getElementById('storageUsageClose'),
+  storageUsageBody: document.getElementById('storageUsageBody'),
   authPanel: document.getElementById('authPanel'),
   appShell: document.getElementById('appShell'),
   authForm: document.getElementById('authForm'),
@@ -514,6 +520,7 @@ function setAccessUi() {
   els.exportBtn?.classList.toggle('hidden', loggedOut || readOnly);
   els.accessBadge?.classList.toggle('hidden', !readOnly);
   els.galleryUploadDrop?.classList.toggle('hidden', !canWrite());
+  els.storageUsageBtn?.classList.toggle('hidden', !(supabaseClient && currentUser && canWrite()));
 }
 
 function updateAddBtnVisibility() {
@@ -2482,6 +2489,41 @@ function companyFromDescription(doc = null, text = '', title = '') {
   return '';
 }
 
+const BREADCRUMB_SKIP_WORDS = new Set([
+  'domov', 'home', 'uvod', 'produkty', 'products', 'cigary', 'cigars',
+  'shop', 'eshop', 'e shop', 'obchod', 'vsetky produkty', 'all products'
+]);
+
+function nameFromRepeatedLine(lines) {
+  const counts = new Map();
+  for (const line of lines) {
+    if (!line || line.length < 4 || line.length > 100) continue;
+    if (/^\d/.test(line) || line.includes('€')) continue;
+    if (BREADCRUMB_SKIP_WORDS.has(normalizeLabel(line))) continue;
+    counts.set(line, (counts.get(line) || 0) + 1);
+  }
+  let best = '';
+  let bestCount = 2;
+  for (const [line, count] of counts) {
+    if (count > bestCount) {
+      bestCount = count;
+      best = line;
+    }
+  }
+  return best;
+}
+
+function nameFromLeadingBreadcrumb(lines) {
+  for (let i = 0; i < Math.min(lines.length, 10); i += 1) {
+    const line = lines[i];
+    const normalized = normalizeLabel(line);
+    if (!normalized || BREADCRUMB_SKIP_WORDS.has(normalized)) continue;
+    if (/\d/.test(line) || line.includes('€')) return '';
+    return line;
+  }
+  return '';
+}
+
 function parseWebshopProduct(raw = '', sourceUrl = '') {
   const doc = documentFromHtml(raw);
   const text = htmlToPlainText(raw);
@@ -2502,7 +2544,7 @@ function parseWebshopProduct(raw = '', sourceUrl = '') {
     }
   })();
 
-  const name = cleanImportedText(titleFromDoc || titleLine || urlName);
+  const name = cleanImportedText(titleFromDoc || titleLine || nameFromRepeatedLine(lines) || nameFromLeadingBreadcrumb(lines) || urlName);
   const length = lineValueAfterColon(text, ['Dĺžka', 'Dlzka']) || lineValueAfterLabel(allLines, ['Dĺžka', 'Dlzka']);
   const diameter = lineValueAfterColon(text, ['Priemer']) || lineValueAfterLabel(allLines, ['Priemer']);
   const lengthMm = parseMmValue(length);
@@ -2562,6 +2604,14 @@ async function tryFetchText(fetchUrl, options = {}) {
   return response.text();
 }
 
+function looksLikeBotChallenge(text = '') {
+  const sample = text.slice(0, 2000);
+  return /just a moment/i.test(sample)
+    || /enable javascript and cookies to continue/i.test(sample)
+    || /challenges\.cloudflare\.com/i.test(sample)
+    || /<title>\s*attention required/i.test(sample);
+}
+
 async function fetchWebshopProductText(productUrl) {
   const attempts = [
     { name: 'direct webshop fetch', url: productUrl, options: { credentials: 'omit' } },
@@ -2569,10 +2619,16 @@ async function fetchWebshopProductText(productUrl) {
     { name: 'AllOrigins', url: `https://api.allorigins.win/raw?url=${encodeURIComponent(productUrl)}`, options: { credentials: 'omit' } }
   ];
   const errors = [];
+  let sawBotChallenge = false;
 
   for (const attempt of attempts) {
     try {
       const text = await tryFetchText(attempt.url, attempt.options);
+      if (text && looksLikeBotChallenge(text)) {
+        sawBotChallenge = true;
+        errors.push(`${attempt.name}: blocked by bot check`);
+        continue;
+      }
       if (text && text.length > 100) return { text, source: attempt.name };
       errors.push(`${attempt.name}: empty response`);
     } catch (error) {
@@ -2580,6 +2636,9 @@ async function fetchWebshopProductText(productUrl) {
     }
   }
 
+  if (sawBotChallenge) {
+    throw new Error('This webshop is blocking automated page reads (a "Just a moment…" bot check). Use the "Export to Pityu Cigar Log" bookmarklet instead — it reads the page in your own browser, after the check passes.');
+  }
   throw new Error(`Could not read the product page. ${errors.join(' | ')}`);
 }
 
@@ -2637,6 +2696,33 @@ async function importFromWebshopLink() {
   }
 }
 
+function importFromPastedWebshopText() {
+  if (!canWrite()) {
+    alert('This account has read-only access.');
+    return;
+  }
+
+  const pastedText = els.webshopPasteInput?.value || '';
+  if (!pastedText.trim()) {
+    setWebshopImportMessage('Paste the product page text first.', 'error');
+    return;
+  }
+
+  const productUrl = validWebshopUrl(els.webshopUrlInput?.value || '') || (els.webshopUrlInput?.value || '').trim();
+
+  try {
+    const imported = parseWebshopProduct(pastedText, productUrl);
+    if (!imported.name || imported.name === 'Untitled cigar') {
+      throw new Error('Could not find a product name in that text. Make sure you copied the whole page (Ctrl+A from the top), or paste the product link above so the name can be read from it.');
+    }
+    applyImportedCigarToOpenForm(imported);
+    setWebshopImportMessage('Filled from pasted text. Check the fields before saving.', 'success');
+  } catch (error) {
+    console.error(error);
+    setWebshopImportMessage(error.message, 'error');
+  }
+}
+
 function buildWebshopBookmarklet() {
   const appUrl = window.location.href.split('#')[0].split('?')[0];
   const script = `(()=>{const A=${JSON.stringify(appUrl)};const T=s=>(s||'').replace(/\\s+/g,' ').trim();const lines=document.body.innerText.split('\\n').map(T).filter(Boolean);const afterColon=l=>{const r=new RegExp(l+'\\\\s*:\\s*([^\\\\n]+)','i').exec(document.body.innerText);return T(r&&r[1]);};const nextAfter=l=>{const i=lines.findIndex(x=>x.toLowerCase()===l.toLowerCase()||x.toLowerCase().includes(l.toLowerCase()));return i>=0?T(lines[i+1]):''};const desc=()=>{const el=document.querySelector('#tab-description,.woocommerce-Tabs-panel--description,.woocommerce-product-details__short-description');return T(el?el.innerText:'')};const title=T(document.querySelector('h1')?.innerText||document.title);const strength=nextAfter('Sila cigary');const length=afterColon('Dĺžka');const diameter=afterColon('Priemer');const cigar={name:title,status:'owned',quantity:1,brand:nextAfter('Značky'),madeIn:nextAfter('Krajina vyroby'),vitola:T([title.split(' ').slice(-1)[0],length&&diameter?length+' × '+diameter:''].filter(Boolean).join(' · ')),strength:(strength.match(/[1-5]/)||[''])[0],price:T(document.querySelector('.price')?.innerText||((document.body.innerText.match(/\\d+[,.]\\d+\\s*€/)||[])[0])),wrapperLeaf:afterColon('Krycí list'),binderLeaf:afterColon('Viazací list'),fillerLeaf:afterColon('Plnivo'),taste:afterColon('Chuť')||nextAfter('Chuťový profil'),notes:desc(),link:location.href,imageCropX:50,imageCropY:50,imageZoom:1};const json=JSON.stringify(cigar);const enc=btoa(unescape(encodeURIComponent(json))).replace(/\\+/g,'-').replace(/\\//g,'_').replace(/=+$/,'');window.open(A+'#webshopCigar='+enc,'_blank');})()`;
@@ -2681,6 +2767,70 @@ function openWebshopModal() {
 
 function closeWebshopModal() {
   els.webshopModal?.classList.add('hidden');
+}
+
+const DATABASE_LIMIT_BYTES = 500 * 1024 * 1024;
+const FILE_STORAGE_LIMIT_BYTES = 1024 * 1024 * 1024;
+
+function formatBytes(bytes) {
+  const value = Number(bytes) || 0;
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  if (value < 1024 * 1024 * 1024) return `${(value / 1024 / 1024).toFixed(1)} MB`;
+  return `${(value / 1024 / 1024 / 1024).toFixed(2)} GB`;
+}
+
+function storageUsageRow(label, used, limit, extra = '', details = []) {
+  const percent = Math.min(100, (used / limit) * 100);
+  const detailList = details.length
+    ? `<ul class="storage-usage-details">${details.map((item) => `<li><span>${escapeHtml(item.label)}</span><span>${formatBytes(item.bytes)}</span></li>`).join('')}</ul>`
+    : '';
+  return `
+    <div class="storage-usage-row">
+      <div class="storage-usage-label"><strong>${escapeHtml(label)}</strong><span>${formatBytes(used)} / ${formatBytes(limit)}</span></div>
+      <div class="storage-usage-bar"><span style="width:${percent.toFixed(1)}%"></span></div>
+      <p class="hint">${percent.toFixed(1)}% used${extra ? ` · ${escapeHtml(extra)}` : ''}</p>
+      ${detailList}
+    </div>`;
+}
+
+function databaseUsageLabel(entry) {
+  if (entry.is_app) return `${entry.name} (your cigar data)`;
+  if (entry.name === 'template0' || entry.name === 'template1') return `${entry.name} (Postgres template)`;
+  if (entry.name.startsWith('_supabase')) return `${entry.name} (Supabase internal)`;
+  return entry.name;
+}
+
+async function openStorageUsageModal() {
+  if (!supabaseClient || !currentUser || !canWrite()) return;
+  els.storageUsageModal?.classList.remove('hidden');
+  els.storageUsageBody.innerHTML = '<p class="subtle">Loading…</p>';
+
+  const { data, error } = await supabaseClient.rpc('get_storage_usage');
+  if (error) {
+    console.error(error);
+    els.storageUsageBody.innerHTML = `<p class="subtle">Could not load storage usage: ${escapeHtml(error.message)}</p><p class="hint">Run supabase-storage-usage.sql in the Supabase SQL Editor first.</p>`;
+    return;
+  }
+
+  const usage = Array.isArray(data) ? data[0] : data;
+  const fileCount = Number(usage?.storage_file_count) || 0;
+  els.storageUsageBody.innerHTML = [
+    storageUsageRow(
+      'Database',
+      Number(usage?.database_bytes) || 0,
+      DATABASE_LIMIT_BYTES,
+      'all databases on the server',
+      (usage?.database_breakdown || [])
+        .map((entry) => ({ label: databaseUsageLabel(entry), bytes: Number(entry.bytes) || 0 }))
+        .sort((a, b) => b.bytes - a.bytes)
+    ),
+    storageUsageRow('File storage', Number(usage?.storage_bytes) || 0, FILE_STORAGE_LIMIT_BYTES, `${fileCount} photo${fileCount === 1 ? '' : 's'}`)
+  ].join('');
+}
+
+function closeStorageUsageModal() {
+  els.storageUsageModal?.classList.add('hidden');
 }
 
 function importWebshopJson() {
@@ -2781,6 +2931,7 @@ function attachEvents() {
   els.webshopClose?.addEventListener('click', closeWebshopModal);
   els.importWebshopJsonBtn?.addEventListener('click', importWebshopJson);
   els.fetchWebshopBtn?.addEventListener('click', importFromWebshopLink);
+  els.fillFromPasteBtn?.addEventListener('click', importFromPastedWebshopText);
   els.webshopUrlInput?.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') {
       event.preventDefault();
@@ -2792,6 +2943,8 @@ function attachEvents() {
   els.importFile.addEventListener('change', (event) => importLog(event.target.files[0]));
   els.authForm?.addEventListener('submit', signIn);
   els.signOutBtn?.addEventListener('click', signOut);
+  els.storageUsageBtn?.addEventListener('click', openStorageUsageModal);
+  els.storageUsageClose?.addEventListener('click', closeStorageUsageModal);
 
   els.cigarsTabBtn?.addEventListener('click', () => setSection('cigars'));
   els.galleryTabBtn?.addEventListener('click', () => setSection('gallery'));
@@ -3111,7 +3264,7 @@ function attachEvents() {
     setCropValues({ x: 50, y: 50, zoom: 1 });
   });
 
-  [els.detailModal, els.formModal, els.galleryModal, els.webshopModal, els.vitolaInfoModal].forEach((modal) => {
+  [els.detailModal, els.formModal, els.galleryModal, els.webshopModal, els.vitolaInfoModal, els.storageUsageModal].forEach((modal) => {
     modal.addEventListener('click', (event) => {
       if (event.target === modal) modal.classList.add('hidden');
     });
@@ -3123,6 +3276,7 @@ function attachEvents() {
       closeDetail();
       closeForm();
       closeWebshopModal();
+      closeStorageUsageModal();
       closeMoreMenu();
       els.vitolaInfoModal?.classList.add('hidden');
     }
